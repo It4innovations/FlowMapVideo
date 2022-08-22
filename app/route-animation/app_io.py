@@ -38,7 +38,7 @@ def load_input(path, g):
     df = read_parquet(path, engine="fastparquet")
     df.reset_index(inplace=True)
 
-    df.drop('status', axis=1, inplace=True)
+#     df.drop('status', axis=1, inplace=True)
 
     df['node_from'] = df['node_from'].astype(str).astype(int64)
     df['node_to'] = df['node_to'].astype(str).astype(int64)
@@ -94,8 +94,8 @@ def load_input(path, g):
 #     df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length']), axis=1)
     df['count_list'] = df.apply(lambda x: get_counts_half(x['start_offset_m'], x['length']), axis=1)
     print(6)
-    df[['count_from','count_to']] = pd.DataFrame(df.count_list.tolist(), index= df.index)
-    df.drop('count_list', axis=1, inplace=True)
+#     df[['count_from','count_to']] = pd.DataFrame(df.count_list.tolist(), index= df.index)
+#     df.drop('count_list', axis=1, inplace=True)
 
     print(df.to_string(index=True,max_rows=100))
 

@@ -13,5 +13,5 @@ def get_route_network_old():
     return ox.graph_from_polygon(polygon, network_type="drive", retain_all=True, clean_periphery=False,
                                  custom_filter='["highway"~"motorway|trunk|primary|secondary"]')
 
-def get_route_network():
-    return ox.load_graphml("../data/custom_f668ec735f24cb771654062a01a463f2.graphml")
+def get_route_network(map_file):
+    return ox.load_graphml(map_file)

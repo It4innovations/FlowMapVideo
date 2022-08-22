@@ -85,15 +85,16 @@ def plot_routes(G, segments, ax,
     # plotting of gradient lines
 #     print(lines)
 #     print(color_scalars)
-    lines = np.vstack(lines)
-    color_scalars = np.hstack(color_scalars)
-    norm = plt.Normalize(min_density, max_density)
+    if len(lines) > 0:
+        lines = np.vstack(lines)
+        color_scalars = np.hstack(color_scalars)
+        norm = plt.Normalize(min_density, max_density)
 
-    coll = LineCollection(lines, cmap='autumn_r', norm=norm)
+        coll = LineCollection(lines, cmap='autumn_r', norm=norm)
 
-    # width in collection XXX
-    line_widths = np.interp(color_scalars, [min_width_density, max_width_density], [2, 4])
-    coll.set_linewidth(line_widths)
+        # width in collection XXX
+        line_widths = np.interp(color_scalars, [min_width_density, max_width_density], [2, 4])
+        coll.set_linewidth(line_widths)
 
-    coll.set_array(color_scalars)
-    ax.add_collection(coll)
+        coll.set_array(color_scalars)
+        ax.add_collection(coll)
