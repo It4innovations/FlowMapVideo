@@ -12,15 +12,6 @@ def reshape(x, y):
     points = np.concatenate([points[:-1], points[1:]], axis=1)
     return points
 
-# první fáze
-# [node1, node2] = [density1, density2]
-# [node2, node1] = [density5, density6]
-# [node1, node3] = [density1, density3]
-# [node2, node4] = [density5, density4]
-
-# druhá fáze
-# [node1, node2] = [density1, edge_den1, edge_den2, density2]
-# [node1, node3] = [density1, density3]
 
 # MAIN PLOT FUNCTION
 def plot_route(G, segment, ax,

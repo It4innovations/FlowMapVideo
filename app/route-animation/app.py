@@ -16,7 +16,7 @@ from app_df import get_max_vehicle_count, get_max_time, get_min_time
 def animate(g, times, ax, ax_settings, timestamp_from):
     def step(i):
         segments = times.loc[timestamp_from + i]
-
+        
         ax.clear()
         ax_settings.apply(ax)
         ax.axis('off')
@@ -26,11 +26,13 @@ def animate(g, times, ax, ax_settings, timestamp_from):
 
 
 @click.command()
-@click.option('--data-file', default="../data/gv_202106016_7_10.parquet", help='Path to file with traffic simulation data.')
-@click.option('--map-file', default="../data/custom_f668ec735f24cb771654062a01a463f2.graphml", help='GRAPHML file with map.')
+@click.option('--data-file', default="../data/gv_325630_records.parquet", help='Path to file with traffic simulation data.')
+@click.option('--map-file', default="../data/map.graphml", help='GRAPHML file with map.')
 @click.option('--save-path', default="", help='Path to the folder for the output video.')
+@click.option('--frame-start', default=0, help="Number of frames to skip before plotting.")
+@click.option('--frames-len', default=None, help="Number of frames to plot")
 
-def main(data_file, map_file, save_path):
+def main(data_file, map_file, save_path, frame_start, frames_len):
     print(data_file)
     print(map_file)
     start = datetime.now()
@@ -44,10 +46,12 @@ def main(data_file, map_file, save_path):
     ax_density = ax_map.twinx()
     ax_map_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
 
-    timestamp_from = get_min_time(times_df)
+    timestamp_from = get_min_time(times_df) + frame_start
+    times_len = get_max_time(times_df) - timestamp_from
+    times_len = min(int(frames_len), times_len) if frames_len else times_len
 
     anim = animation.FuncAnimation(plt.gcf(), animate(g, times_df, ax_settings=ax_map_settings, ax=ax_density, timestamp_from=timestamp_from),
-                                   interval=150, frames=get_max_time(times_df) - timestamp_from, repeat=False)
+                                   interval=150, frames=times_len, repeat=False)
     timestamp = round(time() * 1000)
     if save_path != '' and save_path[-1] != '/':
         save_path = save_path + '/'
