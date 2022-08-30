@@ -49,7 +49,7 @@ def main(data_file, map_file, save_path):
     anim = animation.FuncAnimation(plt.gcf(), animate(g, times_df, ax_settings=ax_map_settings, ax=ax_density, timestamp_from=timestamp_from),
                                    interval=150, frames=get_max_time(times_df) - timestamp_from, repeat=False)
     timestamp = round(time() * 1000)
-    if save_path != '' or save_path[-1] != '/':
+    if save_path != '' and save_path[-1] != '/':
         save_path = save_path + '/'
     anim.save(save_path + str(timestamp) + "-rt.mp4", writer="ffmpeg")
 
