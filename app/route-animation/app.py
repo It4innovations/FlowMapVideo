@@ -31,7 +31,7 @@ def animate(g, times, ax, ax_settings, timestamp_from):
 @click.argument('map-file')
 @click.option('--save-path', default="", help='Path to the folder for the output video.')
 @click.option('--frame-start', default=0, help="Number of frames to skip before plotting.")
-@click.option('--frames-len', default=None, help="Number of frames to plot")
+@click.option('--frames-len', help="Number of frames to plot")
 
 def main(data_file, map_file, save_path, frame_start, frames_len):
     start = datetime.now()

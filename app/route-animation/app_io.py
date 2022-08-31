@@ -85,7 +85,6 @@ def load_input(path, g):
     df = df.groupby(["timestamp", "node_from","node_to",'length']).agg({'vehicle_id': 'count', 'start_offset_m': lambda x: list(x)}, inplace=True)
     df.reset_index(level=['node_to','node_from','length'], inplace=True)
     df.rename(columns = {'vehicle_id':'vehicle_count'}, inplace = True)
-    print(5)
 
     # TODO is there better alternative for apply?
     # apply has better performance than iterating the dataframe and calling the function for each row,
@@ -93,10 +92,9 @@ def load_input(path, g):
     # maybe the list with offsets is not necessary
 #     df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length']), axis=1)
     df['count_list'] = df.apply(lambda x: get_counts_half(x['start_offset_m'], x['length']), axis=1)
-    print(6)
 #     df[['count_from','count_to']] = pd.DataFrame(df.count_list.tolist(), index= df.index)
 #     df.drop('count_list', axis=1, inplace=True)
 
-    print(df.to_string(index=True,max_rows=100))
+#     print(df.to_string(index=True,max_rows=100))
 
     return df
