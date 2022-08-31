@@ -3,6 +3,7 @@ import osmnx as ox
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from os import path
 from matplotlib import animation
 from app_io import load_input
 from datetime import datetime
@@ -16,7 +17,7 @@ from app_df import get_max_vehicle_count, get_max_time, get_min_time
 def animate(g, times, ax, ax_settings, timestamp_from):
     def step(i):
         segments = times.loc[timestamp_from + i]
-        
+
         ax.clear()
         ax_settings.apply(ax)
         ax.axis('off')
@@ -26,15 +27,13 @@ def animate(g, times, ax, ax_settings, timestamp_from):
 
 
 @click.command()
-@click.option('--data-file', default="../data/gv_325630_records.parquet", help='Path to file with traffic simulation data.')
-@click.option('--map-file', default="../data/map.graphml", help='GRAPHML file with map.')
+@click.argument('data-file')
+@click.argument('map-file')
 @click.option('--save-path', default="", help='Path to the folder for the output video.')
 @click.option('--frame-start', default=0, help="Number of frames to skip before plotting.")
 @click.option('--frames-len', default=None, help="Number of frames to plot")
 
 def main(data_file, map_file, save_path, frame_start, frames_len):
-    print(data_file)
-    print(map_file)
     start = datetime.now()
     g = get_route_network(map_file)
 
@@ -53,9 +52,7 @@ def main(data_file, map_file, save_path, frame_start, frames_len):
     anim = animation.FuncAnimation(plt.gcf(), animate(g, times_df, ax_settings=ax_map_settings, ax=ax_density, timestamp_from=timestamp_from),
                                    interval=150, frames=times_len, repeat=False)
     timestamp = round(time() * 1000)
-    if save_path != '' and save_path[-1] != '/':
-        save_path = save_path + '/'
-    anim.save(save_path + str(timestamp) + "-rt.mp4", writer="ffmpeg")
+    anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg")
 
     finish = datetime.now()
     print('doba trvani: ', finish - start)
