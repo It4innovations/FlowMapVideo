@@ -2,7 +2,7 @@ from pandas import read_parquet, to_datetime, cut, to_numeric, to_pickle, read_p
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from networkx import shortest_path_length
+import networkx as nx
 
 def get_counts_by_offset(offset_list, section_length, road_length, count_from, count_to):
     values_list = list(offset_list)
@@ -23,15 +23,43 @@ def get_counts_half(offset_list, length):
             smaller_count += 1
     return (smaller_count, len(offset_list) - smaller_count)
 
-def get_length(g, node_from_id, node_to_id):
+def get_length(row, map):
     try:
-        return g[node_from_id][node_to_id][0]['length']
+        row['length'] = map[row['node_from']][row['node_to']][0]['length']
+        return row
     except KeyError:
         pass
     try:
-        return shortest_path_length(g, node_from_id, node_to_id, weight='length')
-    except Exception:
-        return np.nan
+        print('puvodni: ', row)
+        _, path_nodes = nx.bidirectional_dijkstra(map, row['node_from'], row['node_to'], weight='length')
+        lengths = []
+        total_length = 0
+        old_length_sum = 0
+        for node_index in range(len(path_nodes)-1):
+            length = map[path_nodes[node_index]][path_nodes[node_index + 1]][0]['length']
+            old_length_sum = total_length
+            total_length += length
+            lengths.append(length)
+            if total_length >= row['start_offset_m']:
+                row['node_from'] = path_nodes[node_index]
+                row['node_to'] = path_nodes[node_index + 1]
+                row['length'] = length
+                row['start_offset_m'] = row['start_offset_m'] - old_length_sum
+                print(lengths)
+                print('novy: ', row)
+                return row
+
+        row['length'] = length
+        row['start_offset_m'] = length
+        row['node_from'] = path_nodes[-2]
+        row['node_to'] = path_nodes[-1]
+        print(lengths)
+        print('novy: ', row)
+        return row
+    except (nx.NetworkXNoPath, nx.NodeNotFound):
+        pass
+    row['length'] = np.nan
+    return row
 
 def make_list(start,end):
     if end == 0:
@@ -58,9 +86,12 @@ def load_input(path, g, segment_length):
     df['node_from'] = df['node_from'].astype(str).astype(np.int64)
     df['node_to'] = df['node_to'].astype(str).astype(np.int64)
 
+    df['length'] = pd.Series(dtype='float')
     # add column with length
-    df['length'] = df.apply(lambda row: get_length(g, row['node_from'], row['node_to']), axis=1)
-#     return
+    df = df.apply(get_length, axis=1, map=g)
+    print(df.to_string(index=True,max_rows=100))
+
+    return
 
     # drop rows where path hasn't been found in the graph
     df = df.dropna(subset=['length'])
@@ -126,8 +157,8 @@ def load_input(path, g, segment_length):
 
     df = df.join(df_from)
 
-    df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length'], x['count_from'], x['count_to']), axis=1)
-#     df['count_list'] = df.apply(lambda x: get_counts_half(x['start_offset_m'], x['length']), axis=1)
+#     df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length'], x['count_from'], x['count_to']), axis=1)
+    df['count_list'] = df.apply(lambda x: get_counts_half(x['start_offset_m'], x['length']), axis=1)
 
     print(df.to_string(index=True,max_rows=100))
 
