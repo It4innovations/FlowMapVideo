@@ -30,7 +30,7 @@ def get_length(row, map):
     except KeyError:
         pass
     try:
-        print('puvodni: ', row)
+#         print('puvodni: ', row)
         _, path_nodes = nx.bidirectional_dijkstra(map, row['node_from'], row['node_to'], weight='length')
         lengths = []
         total_length = 0
@@ -45,16 +45,16 @@ def get_length(row, map):
                 row['node_to'] = path_nodes[node_index + 1]
                 row['length'] = length
                 row['start_offset_m'] = row['start_offset_m'] - old_length_sum
-                print(lengths)
-                print('novy: ', row)
+#                 print(lengths)
+#                 print('novy: ', row)
                 return row
 
         row['length'] = length
         row['start_offset_m'] = length
         row['node_from'] = path_nodes[-2]
         row['node_to'] = path_nodes[-1]
-        print(lengths)
-        print('novy: ', row)
+#         print(lengths)
+#         print('novy: ', row)
         return row
     except (nx.NetworkXNoPath, nx.NodeNotFound):
         pass
@@ -89,9 +89,9 @@ def load_input(path, g, segment_length):
     df['length'] = pd.Series(dtype='float')
     # add column with length
     df = df.apply(get_length, axis=1, map=g)
-    print(df.to_string(index=True,max_rows=100))
+#     print(df.to_string(index=True,max_rows=100))
 
-    return
+#     return
 
     # drop rows where path hasn't been found in the graph
     df = df.dropna(subset=['length'])
@@ -159,7 +159,11 @@ def load_input(path, g, segment_length):
 
 #     df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length'], x['count_from'], x['count_to']), axis=1)
     df['count_list'] = df.apply(lambda x: get_counts_half(x['start_offset_m'], x['length']), axis=1)
-
+    df[['count_from','count_to']] = pd.DataFrame(df.count_list.tolist(), index= df.index)
+#     df['count_from'] = df['count_list'][0]
+#     df['count_to'] = df['count_list'][1]
+    df.drop('count_list', axis=1, inplace=True)
+    df.reset_index(level=['node_from', 'node_to'], inplace=True)
     print(df.to_string(index=True,max_rows=100))
 
     return df
