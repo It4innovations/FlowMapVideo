@@ -77,7 +77,6 @@ def load_input(path, g, segment_length):
 
     # load file
     df = read_parquet(path, engine="fastparquet")
-
     df.reset_index(inplace=True)
 
 #     df.drop('status', axis=1, inplace=True)
@@ -85,14 +84,12 @@ def load_input(path, g, segment_length):
 
     df['node_from'] = df['node_from'].astype(str).astype(np.int64)
     df['node_to'] = df['node_to'].astype(str).astype(np.int64)
-
     df['length'] = pd.Series(dtype='float')
     # add column with length
     df = df.apply(get_length, axis=1, map=g)
 #     print(df.to_string(index=True,max_rows=100))
 
 #     return
-
     # drop rows where path hasn't been found in the graph
     df = df.dropna(subset=['length'])
 

@@ -5,13 +5,13 @@ import pandas as pd
 
 from os import path
 from matplotlib import animation
-from app_io import load_input
+from input import load_input
 from datetime import datetime
 from time import time
 from ax_settings import Ax_settings
-from app_base_graph import get_route_network_old, get_route_network_small
+from base_graph import get_route_network_old, get_route_network_small
 from src.collection_plot import plot_routes
-from app_df import get_max_vehicle_count, get_max_time, get_min_time
+from df import get_max_vehicle_count, get_max_time, get_min_time
 
 
 def animate(g, times, ax, ax_settings, timestamp_from):
