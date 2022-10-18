@@ -24,22 +24,16 @@ def get_counts_half(offset_list, length):
     return (smaller_count, len(offset_list) - smaller_count)
 
 def get_length(row, map, dict):
-#     print(row.dtype)
     try:
         row['length'] = map[row['node_from']][row['node_to']][0]['length']
         return row
     except KeyError:
         pass
     try:
-#         print('puvodni: ', row)
         path_nodes = dict.get((row['node_from'],row['node_to']))
         if path_nodes is None:
             _, path_nodes = nx.bidirectional_dijkstra(map, row['node_from'], row['node_to'], weight='length')
             dict[(row['node_from'],row['node_to'])] = path_nodes
-#         values_from_dict = dict.get((row['node_from'],row['node_to']))
-#         len_of_values_from_dict = 0
-#             len_of_values_from_dict = len(values_from_dict)
-#         dict[(row['node_from'],row['node_to'])] = 1
         lengths = []
         total_length = 0
         old_length_sum = 0
@@ -53,16 +47,12 @@ def get_length(row, map, dict):
                 row['node_to'] = path_nodes[node_index + 1]
                 row['length'] = length
                 row['start_offset_m'] = row['start_offset_m'] - old_length_sum
-#                 print(lengths)
-#                 print('novy: ', row)
                 return row
 
         row['length'] = length
         row['start_offset_m'] = length
         row['node_from'] = path_nodes[-2]
         row['node_to'] = path_nodes[-1]
-#         print(lengths)
-#         print('novy: ', row)
         return row
     except (nx.NetworkXNoPath, nx.NodeNotFound):
         pass

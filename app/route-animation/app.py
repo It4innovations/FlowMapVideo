@@ -32,14 +32,24 @@ def animate(g, times, ax, ax_settings, timestamp_from):
 @click.option('--save-path', default="", help='Path to the folder for the output video.')
 @click.option('--frame-start', default=0, help="Number of frames to skip before plotting.")
 @click.option('--frames-len', help="Number of frames to plot")
+@click.option('--processed-data','-p', is_flag=True, help="Data is already processed")
+@click.option('--save-data','-s', is_flag=True, help="Save processed data")
 
-def main(data_file, map_file, save_path, frame_start, frames_len):
+def main(data_file, map_file, save_path, frame_start, frames_len, processed_data, save_data):
+    print(processed_data)
     start = datetime.now()
     g = get_route_network_old()
-    times_df = load_input(data_file, g, 50)
+    if processed_data:
+        times_df = pd.read_csv(data_file)
+        times_df.set_index('timestamp', inplace=True)
+    else:
+        times_df = load_input(data_file, g, 50)
+
+    if save_data:
+        times_df.to_csv('data.csv')
+
     finish = datetime.now()
     print('doba trvani: ', finish - start)
-#     return
     f, ax_map = plt.subplots()
     fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
     fig.set_size_inches(30, 24)
