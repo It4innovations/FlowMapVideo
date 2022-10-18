@@ -23,7 +23,8 @@ def get_counts_half(offset_list, length):
             smaller_count += 1
     return (smaller_count, len(offset_list) - smaller_count)
 
-def get_length(row, map):
+def get_length(row, map, dict):
+#     print(row.dtype)
     try:
         row['length'] = map[row['node_from']][row['node_to']][0]['length']
         return row
@@ -31,7 +32,14 @@ def get_length(row, map):
         pass
     try:
 #         print('puvodni: ', row)
-        _, path_nodes = nx.bidirectional_dijkstra(map, row['node_from'], row['node_to'], weight='length')
+        path_nodes = dict.get((row['node_from'],row['node_to']))
+        if path_nodes is None:
+            _, path_nodes = nx.bidirectional_dijkstra(map, row['node_from'], row['node_to'], weight='length')
+            dict[(row['node_from'],row['node_to'])] = path_nodes
+#         values_from_dict = dict.get((row['node_from'],row['node_to']))
+#         len_of_values_from_dict = 0
+#             len_of_values_from_dict = len(values_from_dict)
+#         dict[(row['node_from'],row['node_to'])] = 1
         lengths = []
         total_length = 0
         old_length_sum = 0
@@ -76,27 +84,27 @@ def make_list_of_offsets(start, end, timestamps, is_last_in_segment):
 def load_input(path, g, segment_length):
 
     # load file
-    df = read_parquet(path, engine="fastparquet")
+    df = read_parquet(path, engine="fastparquet", columns=('timestamp','node_from','node_to','vehicle_id','start_offset_m'))
     df.reset_index(inplace=True)
 
 #     df.drop('status', axis=1, inplace=True)
-    df.drop('speed_mps', axis=1, inplace=True)
+#     df.drop('speed_mps', axis=1, inplace=True)
 
-    df['node_from'] = df['node_from'].astype(str).astype(np.int64)
-    df['node_to'] = df['node_to'].astype(str).astype(np.int64)
-    df['length'] = pd.Series(dtype='float')
-    # add column with length
-    df = df.apply(get_length, axis=1, map=g)
-#     print(df.to_string(index=True,max_rows=100))
-
-#     return
-    # drop rows where path hasn't been found in the graph
-    df = df.dropna(subset=['length'])
-
+    df['node_from'] = df['node_from'].astype(str).astype(np.uint64)
+    df['node_to'] = df['node_to'].astype(str).astype(np.uint64)
+    df['vehicle_id'] = df['vehicle_id'].astype(str).astype(np.uint16)
+    df['start_offset_m'] = df['start_offset_m'].astype(str).astype(np.float32)
+    df['length'] = pd.Series(dtype='float32')
     # change datetime to int
     # TODO casting datetime64[ns] values to int64 with .astype(...) is deprecated and will raise in a future version. Use .view(...) instead.
     df['timestamp']= to_datetime(df['timestamp']).astype(np.int64)//10**9
-#     df['timestamp'] = to_datetime(df['timestamp']).view(int)//10**9
+
+    # add column with length
+    dict = {}
+    df = df.apply(get_length, axis=1, map=g, dict=dict)
+
+    # drop rows where path hasn't been found in the graph
+    df.dropna(subset=['length'], inplace=True)
 
     # add missing times
     df.sort_values(['vehicle_id', 'timestamp'], inplace=True)
@@ -104,13 +112,15 @@ def load_input(path, g, segment_length):
     df['next_offset'] = df['start_offset_m'].shift(-1).astype('float')
 
     mask = (df.node_from != df.node_from.shift(-1)) | (df.node_to != df.node_to.shift(-1))
-    df['next_offset'][mask] = df['length']
+
+    df.loc[mask, 'next_offset'] = df['length']
+
     df['last_in_segment'] = False
-    df['last_in_segment'][mask] = True
+    df.loc[mask, 'last_in_segment'] = True
 
     mask = df.vehicle_id != df.vehicle_id.shift(-1)
-    df['diff'][mask] = 0
-    df['next_offset'][mask] = np.nan
+    df.loc[mask,'diff'] = 0
+    df.loc[mask,'next_offset'] = np.nan
 
     df['timestamp'] = df.apply(lambda x: make_list(x['timestamp'], x['diff']), axis=1)
     df['start_offset_m'] = df.apply(lambda row: make_list_of_offsets(row['start_offset_m'], row['next_offset'], row['timestamp'], row['last_in_segment']), axis=1)
@@ -118,8 +128,11 @@ def load_input(path, g, segment_length):
     df.drop('diff', axis=1, inplace=True)
     df.drop('next_offset', axis=1, inplace=True)
     df.drop('last_in_segment', axis=1, inplace=True)
-    df.set_index(['node_from','node_to','vehicle_id','segment_id','length','index'], inplace=True)
+
+    df.set_index(['node_from','node_to','vehicle_id','length','index'], inplace=True)
+
     df = df.apply(pd.Series.explode)
+
     df.reset_index(inplace=True)
     df.drop('index', axis=1, inplace=True)
 
@@ -136,31 +149,24 @@ def load_input(path, g, segment_length):
     df_to = df2[['timestamp','node_to', 'count_to']].copy()
     df_to.rename(columns = {'node_to':'node_from','count_to':'count_from'}, inplace = True)
 
-    df_from = df_from.append(df_to)
-    df_from.sort_values(['timestamp'], inplace=True)
-
+    df_from = pd.concat([df_from, df_to])
     df_from = df_from.groupby(["timestamp", "node_from"]).agg({'count_from': 'sum'}, inplace=True)
 
     # group by time, nodes and segment, add vehicle count and list of offsets
-    df = df.groupby(["timestamp", "node_from","node_to",'length']).agg({'vehicle_id': 'count', 'start_offset_m': lambda x: list(x)}, inplace=True)
+    df = df.groupby(["timestamp", "node_from","node_to",'length']).agg({'start_offset_m': lambda x: list(x)}, inplace=True)
     df.reset_index(level=['length'], inplace=True)
-    df.rename(columns = {'vehicle_id':'vehicle_count'}, inplace = True)
-
 
     df = df.join(df_from)
     df_from.rename_axis(index=["timestamp", "node_to"], inplace=True)
     df_from.rename(columns = {'count_from':'count_to'}, inplace = True)
-#     print(df.to_string(index=True,max_rows=1))
 
     df = df.join(df_from)
 
-#     df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length'], x['count_from'], x['count_to']), axis=1)
-    df['count_list'] = df.apply(lambda x: get_counts_half(x['start_offset_m'], x['length']), axis=1)
-    df[['count_from','count_to']] = pd.DataFrame(df.count_list.tolist(), index= df.index)
+    df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length'], x['count_from'], x['count_to']), axis=1)
+#     df['count_list'] = df.apply(lambda x: get_counts_half(x['start_offset_m'], x['length']), axis=1)
+#     df[['count_from','count_to']] = pd.DataFrame(df.count_list.tolist(), index= df.index)
 #     df['count_from'] = df['count_list'][0]
 #     df['count_to'] = df['count_list'][1]
     df.drop('count_list', axis=1, inplace=True)
     df.reset_index(level=['node_from', 'node_to'], inplace=True)
-    print(df.to_string(index=True,max_rows=100))
-
     return df
