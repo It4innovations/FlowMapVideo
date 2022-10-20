@@ -74,11 +74,11 @@ def make_list_of_offsets(start, end, timestamps, is_last_in_segment):
 def load_input(path, g, segment_length):
 
     # load file
-    df = read_parquet(path, engine="fastparquet", columns=('timestamp','node_from','node_to','vehicle_id','start_offset_m'))
-    df.reset_index(inplace=True)
+    df = read_parquet(path, engine="fastparquet", columns=['timestamp','node_from','node_to','vehicle_id','start_offset_m'])
 
-#     df.drop('status', axis=1, inplace=True)
-#     df.drop('speed_mps', axis=1, inplace=True)
+    df.reset_index(inplace=True)
+    df = df[['timestamp','node_from','node_to','vehicle_id','start_offset_m']].copy()
+    df.insert(0, 'index', range(0, len(df)))
 
     df['node_from'] = df['node_from'].astype(str).astype(np.uint64)
     df['node_to'] = df['node_to'].astype(str).astype(np.uint64)

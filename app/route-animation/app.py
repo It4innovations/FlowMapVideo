@@ -36,14 +36,13 @@ def animate(g, times, ax, ax_settings, timestamp_from):
 @click.option('--save-data','-s', is_flag=True, help="Save processed data")
 
 def main(data_file, map_file, save_path, frame_start, frames_len, processed_data, save_data):
-    print(processed_data)
     start = datetime.now()
     g = get_route_network_old()
     if processed_data:
         times_df = pd.read_csv(data_file)
         times_df.set_index('timestamp', inplace=True)
     else:
-        times_df = load_input(data_file, g, 50)
+        times_df = load_input(data_file, g, 1000)
 
     if save_data:
         times_df.to_csv('data.csv')
