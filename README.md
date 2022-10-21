@@ -21,3 +21,32 @@ Jednotlivé body zadání jsou:
   * [link](https://ieeexplore.ieee.org/abstract/document/7120975?casa_token=SS_93qCqCkoAAAAA:HoxHGaz1nd4d4u_TCP7qhNqVbFyGSFSGeUl7hip1F0jfK0h17_CniYEfNoPmTdoi5fMxwAkiBnA)
 * D. Guo, "Flow Mapping and Multivariate Visualization of Large Spatial Interaction Data," in IEEE Transactions on Visualization and Computer Graphics, vol. 15, no. 6, pp. 1041-1048, Nov.-Dec. 2009, doi: 10.1109/TVCG.2009.143.
   * [link](https://ieeexplore.ieee.org/abstract/document/5290710?casa_token=DC5BcbHVqmoAAAAA:R_xmPvuwNwrCzqfsHh90M3khegg0MxahsWsKT1UN7WGlf7LunyogQldebv8ZvKYtZWyi8h5UY9I)
+
+## Instalace
+Kód je ve verzi Python 3.10.
+
+1. Nakolonování projektu:
+```
+git clone https://code.it4i.cz/intern/trafficflowmap/flowmapopt.git
+```
+
+2. Instalace balíčků
+```
+cd flowmapopt
+pip install -r requirements.txt
+conda install -c conda-forge ffmpeg
+```
+
+## Spuštění
+```
+python app/route-animation/app.py --help
+```
+* DATA_FILE - cesta k PARQUET souboru se sloupci:
+  * timestamp
+  * node_from (osmnx id)
+  * node_to (osmnx id)
+  * vehicle_id
+  * start_offset_m
+* MAP_FILE - cesta k GRAPHML souboru
+
+

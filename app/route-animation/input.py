@@ -126,8 +126,10 @@ def load_input(path, g, segment_length):
     df.reset_index(inplace=True)
     df.drop('index', axis=1, inplace=True)
 
-    df['count_from'] = np.where(((df['length'] > 2 * segment_length) & (df['start_offset_m'] < segment_length)) | ((df['length'] < 2 * segment_length) & (df['start_offset_m'] < df['length'] / 2)), 1, 0)
-    df['count_to'] = np.where(((df['length'] > 2 * segment_length) & (df['start_offset_m'] > df['length'] - segment_length)) | ((df['length'] < 2 * segment_length) & (df['count_from'] != 1)), 1, 0)
+#     df['count_from'] = np.where(((df['length'] > 2 * segment_length) & (df['start_offset_m'] < segment_length)) | ((df['length'] < 2 * segment_length) & (df['start_offset_m'] < df['length'] / 2)), 1, 0)
+    df['count_from'] = np.where((df['start_offset_m'] < df['length'] / 2), 1, 0)
+#     df['count_to'] = np.where(((df['length'] > 2 * segment_length) & (df['start_offset_m'] > df['length'] - segment_length)) | ((df['length'] < 2 * segment_length) & (df['count_from'] != 1)), 1, 0)
+    df['count_to'] = np.where((df['start_offset_m'] > df['length'] / 2), 1, 0)
 
     df2 = df.groupby(['timestamp',"node_from","node_to"]).agg({'count_from': 'sum', 'count_to': 'sum'})
     df2.reset_index(inplace=True)
@@ -152,11 +154,12 @@ def load_input(path, g, segment_length):
 
     df = df.join(df_from)
 
-    df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length'], x['count_from'], x['count_to']), axis=1)
+#     df['count_list'] = df.apply(lambda x: get_counts_by_offset(x['start_offset_m'], segment_length, x['length'], x['count_from'], x['count_to']), axis=1)
 #     df['count_list'] = df.apply(lambda x: get_counts_half(x['start_offset_m'], x['length']), axis=1)
 #     df[['count_from','count_to']] = pd.DataFrame(df.count_list.tolist(), index= df.index)
 #     df['count_from'] = df['count_list'][0]
 #     df['count_to'] = df['count_list'][1]
-    df.drop('count_list', axis=1, inplace=True)
+    df['count_list'] = list(zip(df['count_from'], df['count_to']))
+#     df.drop('count_list', axis=1, inplace=True)
     df.reset_index(level=['node_from', 'node_to'], inplace=True)
     return df
