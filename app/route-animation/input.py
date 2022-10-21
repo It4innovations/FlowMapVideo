@@ -86,7 +86,6 @@ def load_input(path, g, segment_length):
     df['start_offset_m'] = df['start_offset_m'].astype(str).astype(np.float32)
     df['length'] = pd.Series(dtype='float32')
     # change datetime to int
-    # TODO casting datetime64[ns] values to int64 with .astype(...) is deprecated and will raise in a future version. Use .view(...) instead.
     df['timestamp']= to_datetime(df['timestamp']).astype(np.int64)//10**9
 
     # add column with length
