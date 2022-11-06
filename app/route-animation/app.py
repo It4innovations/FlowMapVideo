@@ -9,7 +9,7 @@ from input import load_input
 from datetime import datetime
 from time import time
 from ax_settings import Ax_settings
-from base_graph import get_route_network_old, get_route_network_small
+from base_graph import get_route_network
 from src.collection_plot import plot_routes
 from df import get_max_vehicle_count, get_max_time, get_min_time
 
@@ -37,12 +37,12 @@ def animate(g, times, ax, ax_settings, timestamp_from):
 
 def main(data_file, map_file, save_path, frame_start, frames_len, processed_data, save_data):
     start = datetime.now()
-    g = get_route_network_old()
+    g = get_route_network(map_file)
     if processed_data:
         times_df = pd.read_csv(data_file)
         times_df.set_index('timestamp', inplace=True)
     else:
-        times_df = load_input(data_file, g, 1000)
+        times_df = load_input(data_file, g)
 
     if save_data:
         times_df.to_csv('data.csv')
@@ -59,8 +59,9 @@ def main(data_file, map_file, save_path, frame_start, frames_len, processed_data
     times_len = get_max_time(times_df) - timestamp_from
     times_len = min(int(frames_len), times_len) if frames_len else times_len
 
-    anim = animation.FuncAnimation(plt.gcf(), animate(g, times_df, ax_settings=ax_map_settings, ax=ax_density, timestamp_from=timestamp_from),
-                                   interval=150, frames=times_len, repeat=False)
+    anim = animation.FuncAnimation(plt.gcf(),
+                                    animate(g, times_df, ax_settings=ax_map_settings, ax=ax_density, timestamp_from=timestamp_from),
+                                    interval=150, frames=times_len, repeat=False)
     timestamp = round(time() * 1000)
     anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg")
 

@@ -23,7 +23,8 @@ Jednotlivé body zadání jsou:
   * [link](https://ieeexplore.ieee.org/abstract/document/5290710?casa_token=DC5BcbHVqmoAAAAA:R_xmPvuwNwrCzqfsHh90M3khegg0MxahsWsKT1UN7WGlf7LunyogQldebv8ZvKYtZWyi8h5UY9I)
 
 ## Instalace
-Kód je ve verzi Python 3.10.
+Kód je ve verzi Python 3.10.  
+Uložení videa vyžaduje FFmpeg.
 
 1. Nakolonování projektu:
 ```
@@ -41,12 +42,19 @@ conda install -c conda-forge ffmpeg
 ```
 python app/route-animation/app.py --help
 ```
-* DATA_FILE - cesta k PARQUET souboru se sloupci:
-  * timestamp
-  * node_from (osmnx id)
-  * node_to (osmnx id)
-  * vehicle_id
-  * start_offset_m
+* DATA_FILE
+  * cesta k PARQUET souboru se sloupci:
+    * timestamp
+    * node_from (osmnx id)
+    * node_to (osmnx id)
+    * vehicle_id
+    * start_offset_m 
+  * v případě použití možnosti ```-p```/```-processed-data``` cesta k CSV souboru se sloupci:
+    * timestamp
+    * node_from (osmnx id)
+    * node_to (osmnx id)
+    * count_from (počet vozidel v první polovině cesty)
+    * count_to (počet vozidel ve druhé polovině cesty)
 * MAP_FILE - cesta k GRAPHML souboru
 
 
