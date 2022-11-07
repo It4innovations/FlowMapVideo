@@ -10,7 +10,7 @@ from datetime import datetime
 from time import time
 from ax_settings import Ax_settings
 from base_graph import get_route_network
-from src.collection_plot import plot_routes
+from .collection_plot import plot_routes
 from df import get_max_vehicle_count, get_max_time, get_min_time
 
 
