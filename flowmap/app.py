@@ -1,18 +1,20 @@
 import click
 import osmnx as ox
-import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib.pyplot as plt
 
+from math import floor
 from os import path
 from matplotlib import animation
-from input import load_input
 from datetime import datetime
 from time import time
-from ax_settings import Ax_settings
-from base_graph import get_route_network
+
 from flowmapviz.collection_plot import plot_routes, WidthStyle
-from df import get_max_vehicle_count, get_max_time, get_min_time
-from math import floor
+
+from .input import load_input
+from .df import get_max_vehicle_count, get_max_time, get_min_time
+from .ax_settings import Ax_settings
+from .base_graph import get_route_network
 
 
 def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):

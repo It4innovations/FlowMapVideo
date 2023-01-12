@@ -1,5 +1,5 @@
+flowmapviz @ git+https://project_1326_bot:glpat-t4wir2xP9HvEyxmp1tCb@code.it4i.cz/intern/trafficflowmap/flowmapviz.git@set-as-library
 click
 osmnx
 fastparquet
-flowmapviz @ git+https://code.it4i.cz/intern/trafficflowmap/flowmapviz.git
 ffmpeg

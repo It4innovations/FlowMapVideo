@@ -22,25 +22,29 @@ Jednotlivé body zadání jsou:
 * D. Guo, "Flow Mapping and Multivariate Visualization of Large Spatial Interaction Data," in IEEE Transactions on Visualization and Computer Graphics, vol. 15, no. 6, pp. 1041-1048, Nov.-Dec. 2009, doi: 10.1109/TVCG.2009.143.
   * [link](https://ieeexplore.ieee.org/abstract/document/5290710?casa_token=DC5BcbHVqmoAAAAA:R_xmPvuwNwrCzqfsHh90M3khegg0MxahsWsKT1UN7WGlf7LunyogQldebv8ZvKYtZWyi8h5UY9I)
 
+
 ## Instalace
-Kód je ve verzi Python 3.10.  
-Uložení videa vyžaduje FFmpeg.
 
-1. Nakolonování projektu:
+### Prerekvizity
+
+Pro uložení videa je potřeba `FFmpeg`.
+
+##
+
+1. Vytvoření a aktivace virtuálnáho prostředí:
 ```
-git clone https://code.it4i.cz/intern/trafficflowmap/flowmapopt.git
+virtualenv <VENV>
+source <VENV>/bin/activate
 ```
 
-2. Instalace balíčků
+2. Instalace přes pip
 ```
-cd flowmapopt
-pip install -r requirements.txt
-conda install -c conda-forge ffmpeg
+python3 -m pip install git+https://project_1327_bot:glpat-YdTTaGALriUSyz7DDmix@code.it4i.cz/intern/trafficflowmap/flowmapopt.git@dev 
 ```
 
 ## Spuštění
 ```
-python app/route-animation/app.py --help
+traffic-flow-map --help
 ```
 * DATA_FILE
   * cesta k PARQUET souboru se sloupci:
