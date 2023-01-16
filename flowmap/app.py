@@ -8,13 +8,13 @@ from os import path
 from matplotlib import animation
 from datetime import datetime
 from time import time
+from ruth.simulator import Simulation
 
 from flowmapviz.collection_plot import plot_routes, WidthStyle
 
-from .input import load_input
+from .input import preprocess_history_records
 from .df import get_max_vehicle_count, get_max_time, get_min_time
 from .ax_settings import Ax_settings
-from .base_graph import get_route_network
 
 
 def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
@@ -36,8 +36,7 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
 
 
 @click.command()
-@click.argument('data-file')
-@click.argument('map-file')
+@click.argument('simulation_path')
 @click.option('--save-path', default="", help='Path to the folder for the output video.')
 @click.option('--frame-start', default=0, help="Number of frames to skip before plotting.")
 @click.option('--frames-len', help="Number of frames to plot")
@@ -50,14 +49,12 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
 @click.option('--title','-t', default="", help='Set video title')
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
 
-def main(data_file, map_file, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
+def main(simulation_path, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
     start = datetime.now()
-    g = get_route_network(map_file)
-    if processed_data:
-        times_df = pd.read_csv(data_file)
-        times_df.set_index('timestamp', inplace=True)
-    else:
-        times_df = load_input(data_file, g)
+
+    sim = Simulation.load(simulation_path)
+    g = sim.routing_map.network
+    times_df = preprocess_history_records(sim, g)
 
     if save_data:
         times_df.to_csv('data.csv')

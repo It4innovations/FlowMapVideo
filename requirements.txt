@@ -1,4 +1,6 @@
 flowmapviz @ git+https://project_1326_bot:glpat-t4wir2xP9HvEyxmp1tCb@code.it4i.cz/intern/trafficflowmap/flowmapviz.git@set-as-library
+ruth @ git+https://github.com/It4innovations/ruth@sim-object
+
 click
 osmnx
 fastparquet

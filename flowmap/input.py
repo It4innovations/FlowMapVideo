@@ -71,10 +71,11 @@ def make_list_of_offsets(start, end, timestamps, is_last_in_segment):
         return np.linspace(start, end, num=len(timestamps))
     return np.linspace(start, end, num=len(timestamps)+1)[:-1]
 
-def load_input(path, g):
+def preprocess_history_records(simulation, g):
+    # TODO: document this method; maybe refactor by spliting to separate functions
 
     # load file
-    df = read_parquet(path, engine="fastparquet", columns=['timestamp','node_from','node_to','vehicle_id','start_offset_m'])
+    df = simulation.history.to_dataframe()  # NOTE: this method has some non-trivial overhead
 
     df.reset_index(inplace=True)
     df = df[['timestamp','node_from','node_to','vehicle_id','start_offset_m']].copy()
