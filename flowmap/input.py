@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import networkx as nx
-from dataclasses import dataclass
 
 def get_counts_by_offset(offset_list, section_length, road_length, count_from, count_to):
     values_list = list(offset_list)
@@ -36,46 +35,47 @@ def get_length(node_from_to, g):
     return data['length']
 
 
-@dataclass
-class Row: # (Record)
-    datetime: datetime # maybe timestamp as an integer
-    vehicle_id: int
-    segment_id: str
-    start_offset_m: float
-    speed_mps: float
-    status: str
-    node_from: int
-    node_to: int
-
-# def test():
-#     abc = [(1,2,3), (3,4,5), (5, 6, 7)]
-#     rows = list(map(lambda args: Row(*args), abc))
-
-def fill_missing_timestamps(row, fps: int):
+def fill_missing_timestamps(row, interval: int):
     start, end = row[["timestamp", "next_timestamp"]]
-    if end == 0:  # 0 means a change of <WHAT>?
+    if end == 0:  # if change of vehicle, just keep one row
         return np.int64(start),
-    return tuple(range(np.int64(start),np.int64(end), round(1000 / fps))) # NOTE: 1000ms = 1s
+    return tuple(range(np.int64(start),np.int64(end) - 1))
 
 
 def fill_missing_offsets(row):
-    start, end, is_last_in_segment, timestamps = row[["start_offset_m", "next_offset", "last_in_segment","timestamp"]]
+    start, end, is_last_in_segment, timestamps, length = row[["start_offset_m", "next_offset", "last_in_segment","timestamp","length"]]
+    # if change of vehicle, just keep the row untouched
     if np.isnan(end):
         return start,
     if is_last_in_segment:
-        return np.linspace(start, end, num=len(timestamps))
+        return np.linspace(start, end + length, num=len(timestamps))
     return np.linspace(start, end, num=len(timestamps)+1)[:-1]
 
 
-def fill_missing_rows(df, fps):
+def fill_missing(row, interval):
+    start, end = row[["timestamp", "next_timestamp"]]
+    if end == 0:  # if change of vehicle, just keep one row
+        timestamps = np.int64(start),
+    else:
+        timestamps = tuple(range(np.int64(start),np.int64(end) - 1))
+
+    start, end, is_last_in_segment, length = row[["start_offset_m", "next_offset", "last_in_segment","length"]]
+    # if change of vehicle, just keep the row untouched
+    if np.isnan(end):
+        offsets = start,
+        return timestamps, offsets
+    if is_last_in_segment:
+        return timestamps, np.linspace(start, end + length, num=len(timestamps))
+    return timestamps, np.linspace(start, end, num=len(timestamps)+1)[:-1]
+
+def fill_missing_rows(df, interval):
     # add missing times
     df.sort_values(['vehicle_id', 'timestamp'], inplace=True)
     df['next_timestamp'] = df['timestamp'].shift(-1, fill_value=0)
     df['next_offset'] = df['start_offset_m'].shift(-1).astype('float')
 
-    # true if a vehicle change the semgent
+    # true if a vehicle changes the semgent
     mask = (df.node_from != df.node_from.shift(-1)) | (df.node_to != df.node_to.shift(-1))
-    df.loc[mask, 'next_offset'] = df['length']  # floor the the offset when the segment has changed
 
     df['last_in_segment'] = False
     df.loc[mask, 'last_in_segment'] = True
@@ -86,9 +86,17 @@ def fill_missing_rows(df, fps):
     df.loc[mask,'next_offset'] = np.nan
 
     # now timestamp contains a list of timestamps which will be unrolled later
-    df['timestamp'] = df.apply(lambda row: fill_missing_timestamps(row, fps), axis=1)
+    df['timestamp'] = df.apply(lambda row: fill_missing_timestamps(row, interval), axis=1)
 
     df['start_offset_m'] = df.apply(lambda row: fill_missing_offsets(row), axis=1)
+
+#     df['timestamp','start_offset_m'] = df.apply(lambda row: fill_missing(row, fps), axis=1)
+
+
+    df['next_node_from'] = df['node_from'].shift(-1, fill_value=0)
+    df['next_node_to'] = df['node_to'].shift(-1, fill_value=0)
+    df['next_length'] = df['length'].shift(-1)
+    df['next_vehicle_id'] = df['vehicle_id'].shift(-1)
 
     # reimplemented two lines before
 
@@ -104,23 +112,24 @@ def fill_missing_rows(df, fps):
     df.drop('next_offset', axis=1, inplace=True)
     df.drop('last_in_segment', axis=1, inplace=True)
 
-#     for i in range(5):
-#         df2 = df.copy()
-#         start = datetime.now()
-#         df2.explode(column=['timestamp','start_offset_m'])
-#         finish = datetime.now()
-#         print('doba trvani df explode: ', finish - start)
-#
-#         df2 = df.copy()
-#         start = datetime.now()
-#         df.set_index(['node_from','node_to','vehicle_id','length'], inplace=True)
-#         df = df.apply(pd.Series.explode)  # TODO: maybe try to use explode on dataframe directly
-#         df.reset_index(inplace=True)
-#         finish = datetime.now()
-#         print('doba trvani series explode: ', finish - start)
-
      #         <<< end of change vehicle
     df = df.explode(column=['timestamp','start_offset_m'])
+
+    df.reset_index(inplace=True)
+
+    df['new_node_to'] =  df['node_to']
+    df['new_node_from'] =  df['node_from']
+    df['new_start_offset_m'] =  df['start_offset_m']
+    df['new_length'] =  df['length']
+
+    mask = (df['start_offset_m'] > df['length']) & (df['next_vehicle_id'] == df['vehicle_id'])
+    df.loc[mask ,'new_node_from'] = df['next_node_from']
+    df.loc[mask ,'new_node_to'] = df['next_node_to']
+    df.loc[mask, 'new_start_offset_m'] = df['start_offset_m'] - df['length']
+    df.loc[mask, 'new_length'] = df['next_length']
+
+    df.drop(['node_to','node_from','start_offset_m','length','next_node_from','next_node_to','next_length','next_vehicle_id'], axis=1, inplace=True)
+    df.rename(columns = {'new_node_to':'node_to','new_node_from':'node_from','new_start_offset_m':'start_offset_m','new_length':'length'}, inplace = True)
 
     return df
 
@@ -177,14 +186,23 @@ def add_counts(df):
     return df
 
 
-def preprocess_history_records(simulation, g, fps=1):
-    # TODO: document this method; maybe refactor by splitting to separate functions
-
+def preprocess_history_records(simulation, g, speed=1, fps=25):
     # load file
-    df = simulation.global_view.to_dataframe()  # NOTE: this method has some non-trivial overhead
-    # df.reset_index(inplace=True)
+    df = simulation.history.to_dataframe()  # NOTE: this method has some non-trivial overhead
+#     df = simulation.global_view.to_dataframe()  # NOTE: this method has some non-trivial overhead
+
+#     print(df)
+#     print(df.dtypes)
+#     print(df.loc[(df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (df['timestamp'] < np.datetime64('2021-06-16T08:01:00.000')),:])
+#     print(df.loc[(df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (df['timestamp'] < np.datetime64('2021-06-16T08:30:00.000')),:])
+#     print(df.loc[(df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (df['timestamp'] < np.datetime64('2021-06-16T09:00:00.000')),:])
+    interval = speed / fps
+    df = df.loc[(df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (df['timestamp'] < np.datetime64('2021-06-16T09:00:00.000')),:]
+    print('data loaded')
+    start = datetime.now()
+
+    start_n = datetime.now()
     df = df[['timestamp','node_from','node_to','vehicle_id','start_offset_m']].copy()
-    # df.insert(0, 'index', range(0, len(df)))
 
     df['node_from'] = df['node_from'].astype(str).astype(np.uint64)
     df['node_to'] = df['node_to'].astype(str).astype(np.uint64)
@@ -193,24 +211,45 @@ def preprocess_history_records(simulation, g, fps=1):
     df['length'] = pd.Series(dtype='float32')
     # change datetime to int
     df['timestamp']= to_datetime(df['timestamp']).astype(np.int64)//10**6 # resolution in milliseconds
+    print(df)
+
+    df['timestamp'] = df['timestamp'].div(1000 * interval).round()
+    df = df.groupby(['timestamp','vehicle_id']).first().reset_index()
+
+    print('data types set in ')
+    print(datetime.now() - start_n)
+    start_n = datetime.now()
 
     # add column with length
-    # dictionary = {}
     df["length"] = df[["node_from", "node_to"]].apply(get_length, axis=1, g=g)
-#     print(1)
-#     print(df.shape)
-#     print(df['length'].isna().sum())
+
     # NOTE: comment this later - there are segments not found in the map in the data
-#     df.dropna(inplace=True)
 
     # drop rows where path hasn't been found in the graph
     df.dropna(subset=['length'], inplace=True)
-    df = fill_missing_rows(df, fps)
+    print('length added in ')
+    print(datetime.now() - start_n)
+    start_n = datetime.now()
+
+    print(df.shape)
+    df = fill_missing_rows(df, interval)
+    print(df.shape)
+
+    print('missing rows filled in in ')
+    print(datetime.now() - start)
+    start_n = datetime.now()
+
+    df.sort_values(['timestamp', 'vehicle_id'], inplace=True)
 
     df = add_counts(df)
 
     df.drop(['length','start_offset_m','vehicle_id'], axis=1, inplace=True)
     df.reset_index(level=['node_from', 'node_to'], inplace=True)
-    print(df)
-    print(df.head(70))
+
+    print('counts added in ')
+    print(datetime.now() - start_n)
+
+    finish = datetime.now()
+    print('doba trvani: ', finish - start)
+
     return df

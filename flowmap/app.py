@@ -13,6 +13,7 @@ from ruth.simulator import Simulation
 from flowmapviz.collection_plot import plot_routes, WidthStyle
 
 from input import preprocess_history_records
+# from input_alt import preprocess_history_records
 from df import get_max_vehicle_count, get_max_time, get_min_time
 from ax_settings import Ax_settings
 
@@ -23,9 +24,10 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
         ax_settings.apply(ax)
         ax.axis('off')
 
-        timestamp = timestamp_from + i * speed # * round(1000 / fps)
-        if(i % 5*60 == 0):
-            time_text_artist.set_text(datetime.utcfromtimestamp(timestamp//10**3))
+        timestamp = timestamp_from + i # * speed # * round(1000 / fps)
+        # TODO: fix time label
+#         if(i % 5*60 == 0):
+#             time_text_artist.set_text(datetime.utcfromtimestamp(timestamp//10**3))
 
         if timestamp in times.index:
             segments = times.loc[timestamp]
@@ -39,12 +41,13 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
 
 @click.command()
 @click.argument('simulation_path')
+@click.option('--fps', '-f', default=25, help="Set video frames per second.", show_default=True)
 @click.option('--save-path', default="", help='Path to the folder for the output video.')
 @click.option('--frame-start', default=0, help="Number of frames to skip before plotting.")
 @click.option('--frames-len', help="Number of frames to plot")
 @click.option('--processed-data','-p', is_flag=True, help="Data is already processed")
 @click.option('--save-data','-s', is_flag=True, help="Save processed data")
-@click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='EQUIDISTANT',
+@click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='CALLIGRAPHY',
               help="Choose style of width plotting")
 @click.option('--width-modif', default=10, type=click.IntRange(2, 200, clamp=True), show_default=True,
               help="Adjust width.")
@@ -52,12 +55,12 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
 # TODO: add option for fps
 
-def main(simulation_path, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
+def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
     start = datetime.now()
-
     sim = Simulation.load(simulation_path)
     g = sim.routing_map.network
-    times_df = preprocess_history_records(sim, g, 25)
+
+    times_df = preprocess_history_records(sim, g, speed, fps)
 
     if save_data:
         times_df.to_csv('data.csv')
@@ -84,7 +87,8 @@ def main(simulation_path, save_path, frame_start, frames_len, processed_data, sa
     ax_density = ax_map.twinx()
     ax_map_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
 
-    width_style_enum_option = WidthStyle.EQUIDISTANT
+    # TODO: fix style
+    width_style_enum_option = WidthStyle.CALLIGRAPHY
     for el in WidthStyle:
         if el.name == width_style:
             width_style_enum_option = el
@@ -103,9 +107,12 @@ def main(simulation_path, save_path, frame_start, frames_len, processed_data, sa
                                         time_text_artist = time_text,
                                         speed = speed
                                         ),
-                                    interval=75, frames=floor(times_len/speed), repeat=False)
+                                    interval=75, frames=floor(times_len), repeat=False)
     timestamp = round(time() * 1000)
-    anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg", fps=25)
+
+    anim_start = datetime.now()
+    anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg", fps=fps)
+    print('doba trvani ulozeni animace: ', datetime.now() - anim_start)
 
     finish = datetime.now()
     print('doba trvani: ', finish - start)
