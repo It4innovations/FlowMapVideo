@@ -3,6 +3,7 @@ import osmnx as ox
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import multiprocessing as mp
 import pathlib
 
 from math import floor
@@ -14,9 +15,72 @@ from ruth.simulator import Simulation
 
 from flowmapviz.collection_plot import plot_routes, WidthStyle
 
-from input import preprocess_history_records
+from input import preprocess_fill_missing_times, preprocess_add_counts
 from df import get_max_vehicle_count, get_max_time, get_min_time
 from ax_settings import Ax_settings
+
+
+def preprocess_fill_mp(res_list, id, df, g, speed, fps):
+    res_list[id] = preprocess_fill_missing_times(df, g, speed, fps)
+
+
+def preprocess_counts_mp(res_list, id, df, g, speed, fps):
+    res_list[id] = preprocess_add_counts(df)
+
+
+def preprocess_mp(df, g, speed, fps):
+    start = datetime.now()
+
+    cpu_count = mp.cpu_count()
+    num_of_processes = cpu_count
+
+    min_vehicle_id = df['vehicle_id'].min()
+    max_vehicle_id = df['vehicle_id'].max()
+    number_of_ids = max_vehicle_id - min_vehicle_id + 1
+    one_df_vehicle_ids = round(number_of_ids / num_of_processes)
+    split_vehicle_ids = [min_vehicle_id + x * one_df_vehicle_ids for x in range(num_of_processes)]
+    split_vehicle_ids.append(max_vehicle_id + 1)
+
+    manager = mp.Manager()
+    df_list = manager.list()
+    df_list.extend([None] * num_of_processes)
+
+    processes = []
+
+    for i in range(num_of_processes):
+      p = mp.Process(target = preprocess_fill_mp,args = (df_list, i, df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]),:] , g, speed, fps))
+      p.start()
+      processes.append(p)
+
+    for process in processes:
+          process.join()
+
+
+    df = pd.concat(df_list)
+    print("rows filled in: ", datetime.now() - start)
+
+    start2 = datetime.now()
+    df.sort_values(['timestamp'], inplace=True)
+
+    number_of_rows = df.shape[0]
+    one_df_rows = round(number_of_rows / num_of_processes)
+    split_datetimes = [df.iloc[x * one_df_rows]['timestamp'] for x in range(num_of_processes)]
+    split_datetimes.append(df.iloc[-1]['timestamp'] + 1)
+    processes = []
+
+    for i in range(num_of_processes):
+          p = mp.Process(target = preprocess_counts_mp,args = (df_list, i, df.loc[(df['timestamp'] >= split_datetimes[i]) & (df['timestamp'] < split_datetimes[i + 1]),:] , g, speed, fps))
+          p.start()
+          processes.append(p)
+
+    for process in processes:
+          process.join()
+
+    df = pd.concat(df_list)
+    print(df.shape)
+    print("counts added in: ", datetime.now() - start2)
+    print("total time: ", datetime.now() - start)
+    return df
 
 
 def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
@@ -67,7 +131,7 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
     times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:01:00.000')),:]
 
     start = datetime.now()
-    times_df = preprocess_history_records(times_df, g, speed, fps)
+    times_df = preprocess_mp(times_df, g, speed, fps)
     print("df shape: ", times_df.shape)
     print("time of preprocessing: ", datetime.now() - start)
 
