@@ -60,13 +60,17 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
     sim = Simulation.load(simulation_path)
     g = sim.routing_map.network
 
-    times_df = preprocess_history_records(sim, g, speed, fps)
+    start = datetime.now()
+    times_df = preprocess_history_records(sim.history.to_dataframe(), g, speed, fps)
+    print("data len: ", len(times_df))
+    print("time of preprocessing: ", datetime.now() - start)
 
     if save_data:
         times_df.to_csv('data.csv')
 
-    finish = datetime.now()
-    print('doba trvani: ', finish - start)
+    return
+
+    # ---------------------------------------------------------------------------
 
     max_count = times_df['count_from'].max()
     max_to = times_df['count_to'].max()
