@@ -1,4 +1,6 @@
 from setuptools import setup, find_packages
+from Cython.Build import cythonize
+import numpy
 
 with open("requirements.txt") as reqs:
     requirements = [line.strip() for line in reqs.readlines()]
@@ -15,5 +17,6 @@ setup(
         "console_scripts": [
             "traffic-flow-map = flowmap.app:main"
         ]
-    }
+    },
+    ext_modules=cythonize('flowmap/cinput.pyx'),
 )

@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import networkx as nx
+import cinput as ci
+
 from math import floor
 
 
@@ -16,27 +18,6 @@ def get_segment_length(node_from_to, g):
     data = data[0]
     assert "length" in data
     return data['length']
-
-
-def fill_missing_timestamps(row, interval: int):
-    start, end = row[['timestamp', 'next_timestamp']]
-    if end == -1:  # if change of vehicle, just keep one row
-        return np.int64(start),
-    return tuple(range(np.int64(start),np.int64(end) - 1))
-
-
-def fill_missing_offsets(row):
-    start, end, is_last_in_segment, timestamps, length = row[['start_offset_m',
-                                                              'next_offset',
-                                                              'last_in_segment',
-                                                              'timestamp',
-                                                              'length']]
-    # if change of vehicle, just keep the row untouched
-    if end == -1:
-        return start,
-    if is_last_in_segment:
-        return np.linspace(start, end + length, num=len(timestamps))
-    return np.linspace(start, end, num=len(timestamps)+1)[:-1]
 
 
 def fill_missing_rows(df, interval):
@@ -57,8 +38,11 @@ def fill_missing_rows(df, interval):
     df.loc[mask,'next_offset'] = -1
 
     # now timestamp contains a list of timestamps which will be unrolled later
-    df['timestamp'] = df.apply(lambda row: fill_missing_timestamps(row, interval), axis=1)
-    df['start_offset_m'] = df.apply(lambda row: fill_missing_offsets(row), axis=1)
+#     df['timestamp'] = df.apply(lambda row: fill_missing_timestamps(row, interval), axis=1)
+    df['timestamp'] = df.apply(lambda row: ci.fill_missing_timestamps_cython(row['timestamp'], row['next_timestamp'], interval), axis=1)
+#     print(df.loc[df['timestamp3'] != df['timestamp2'],:])
+    df['start_offset_m'] = df.apply(lambda row: ci.fill_missing_offsets_cython(row['start_offset_m'], row['next_offset'], row['last_in_segment'], len(row["timestamp"]),row["length"]), axis=1)
+#     df['start_offset_m'] = df.apply(lambda row: fill_missing_offsets(row), axis=1)
 
     df[['next_node_from', 'next_node_to', 'next_length', 'next_vehicle_id']] = df[['node_from', 'node_to', 'length', 'vehicle_id']].shift(-1, fill_value=0)
 
@@ -169,6 +153,9 @@ def preprocess_history_records(df, g, speed=1, fps=25, version=1):
 
 def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     interval = speed / fps
+    df = df.loc[(df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (df['timestamp'] < np.datetime64('2021-06-16T09:00:00.000')),:]
+    print('data loaded')
+    start = datetime.now()
 
     df = df[['timestamp', 'node_from', 'node_to', 'vehicle_id', 'start_offset_m']].copy()
 

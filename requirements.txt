@@ -5,3 +5,4 @@ click
 osmnx
 fastparquet
 ffmpeg
+cython
