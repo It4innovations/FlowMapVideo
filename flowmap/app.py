@@ -2,6 +2,7 @@ import click
 import osmnx as ox
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 from math import floor
 from os import path
@@ -13,7 +14,6 @@ from ruth.simulator import Simulation
 from flowmapviz.collection_plot import plot_routes, WidthStyle
 
 from input import preprocess_history_records
-# from input_alt import preprocess_history_records
 from df import get_max_vehicle_count, get_max_time, get_min_time
 from ax_settings import Ax_settings
 
@@ -53,20 +53,22 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
               help="Adjust width.")
 @click.option('--title','-t', default="", help='Set video title')
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
-# TODO: add option for fps
 
 def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
     start = datetime.now()
     sim = Simulation.load(simulation_path)
     g = sim.routing_map.network
+    times_df = sim.history.to_dataframe()  # NOTE: this method has some non-trivial overhead
+#     times_df = sim.global_view.to_dataframe()  # NOTE: this method has some non-trivial overhead
+    times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:01:00.000')),:]
 
-    times_df = preprocess_history_records(sim, g, speed, fps)
+    start = datetime.now()
+    times_df = preprocess_history_records(times_df, g, speed, fps)
+    print("df shape: ", times_df.shape)
+    print("time of preprocessing: ", datetime.now() - start)
 
     if save_data:
         times_df.to_csv('data.csv')
-
-    finish = datetime.now()
-    print('doba trvani: ', finish - start)
 
     max_count = times_df['count_from'].max()
     max_to = times_df['count_to'].max()
@@ -87,13 +89,8 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
     ax_density = ax_map.twinx()
     ax_map_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
 
-    # TODO: fix style
-    width_style_enum_option = WidthStyle.CALLIGRAPHY
-    for el in WidthStyle:
-        if el.name == width_style:
-            width_style_enum_option = el
+    width_style = WidthStyle[width_style]
 
-    print(floor(times_len/speed))
     anim = animation.FuncAnimation(plt.gcf(),
                                     animate(
                                         g,
@@ -103,7 +100,7 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
                                         timestamp_from=timestamp_from,
                                         max_count = max_count,
                                         width_modif = width_modif,
-                                        width_style = width_style_enum_option,
+                                        width_style = width_style,
                                         time_text_artist = time_text,
                                         speed = speed
                                         ),
