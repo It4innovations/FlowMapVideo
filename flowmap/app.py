@@ -2,8 +2,9 @@ import click
 import osmnx as ox
 import pandas as pd
 import matplotlib.pyplot as plt
-import pathlib
 import numpy as np
+import multiprocessing as mp
+import itertools as itertools
 
 from math import floor
 from os import path
@@ -18,6 +19,78 @@ from input import preprocess_history_records
 # from input_alt import preprocess_history_records
 from df import get_max_vehicle_count, get_max_time, get_min_time
 from ax_settings import Ax_settings
+
+
+def preprocess_fill_mp_alt(res_list, id, df, g, speed, fps, lock, counts_dict):
+    res_list[id], _ = preprocess_fill_missing_times(df, g, speed, fps, counts_dict, lock)
+
+
+def preprocess_counts_mp_alt(res_list, id, records, g, speed, fps, counts_dict):
+    res_list[id] = preprocess_add_counts(records, counts_dict)
+
+
+def preprocess_mp_alt(df, g, speed, fps):
+    start = datetime.now()
+    cpu_count = mp.cpu_count()
+    num_of_processes = cpu_count
+
+    min_vehicle_id = df['vehicle_id'].min()
+    max_vehicle_id = df['vehicle_id'].max()
+    number_of_ids = max_vehicle_id - min_vehicle_id + 1
+    one_df_vehicle_ids = round(number_of_ids / num_of_processes)
+    split_vehicle_ids = [min_vehicle_id + x * one_df_vehicle_ids for x in range(num_of_processes)]
+    split_vehicle_ids.append(max_vehicle_id + 1)
+
+    lock = mp.Lock()
+    manager = mp.Manager()
+    res_list = manager.list()
+    counts_dict = manager.dict()
+    res_list.extend([None] * num_of_processes)
+
+    processes = []
+    for i in range(num_of_processes):
+        p = mp.Process(target = preprocess_fill_mp_alt,args = (res_list, i, df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]),:] , g, speed, fps, lock, counts_dict))
+        p.start()
+        processes.append(p)
+
+    for process in processes:
+        process.join()
+
+    res_list_conc = list(itertools.chain.from_iterable(res_list))
+    res_list_conc = sorted(res_list_conc, key=lambda x: x.timestamp)
+    print("rows filled in: ", datetime.now() - start)
+
+    start2 = datetime.now()
+
+    number_of_rows = len(res_list_conc)
+    one_df_rows = round(number_of_rows / num_of_processes)
+    split_datetimes = [res_list_conc[x * one_df_rows].timestamp for x in range(num_of_processes)]
+
+    processes = []
+    j = 0
+
+    for i in range(num_of_processes):
+        current_list = []
+        if i == num_of_processes - 1:
+            current_list = res_list_conc[j:]
+        else:
+            for k in range(j, len(res_list_conc)):
+                if res_list_conc[k].timestamp > split_datetimes[i + 1]:
+                    break
+                current_list.append(res_list_conc[k])
+                j += 1
+        p = mp.Process(target = preprocess_counts_mp_alt,args = (res_list, i, current_list, g, speed, fps, counts_dict))
+        p.start()
+        processes.append(p)
+
+    for process in processes:
+        process.join()
+
+    res_list = list(itertools.chain.from_iterable(res_list))
+    print("counts added in: ", datetime.now() - start2)
+    print("total time: ", datetime.now() - start)
+    print("full len mp: ", len(res_list))
+    return res_list
 
 
 def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
@@ -55,25 +128,30 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
               help="Adjust width.")
 @click.option('--title','-t', default="", help='Set video title')
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
+# TODO: add option for fps
 
 def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
-    pathlib.PosixPath = pathlib.WindowsPath
-
     start = datetime.now()
     sim = Simulation.load(simulation_path)
     g = sim.routing_map.network
+    times_df = sim.history.to_dataframe()  # NOTE: this method has some non-trivial overhead
+#     times_df = sim.global_view.to_dataframe()  # NOTE: this method has some non-trivial overhead
+    times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:00:05.000')),:]
 
     start = datetime.now()
-    times_df = preprocess_history_records(sim.history.to_dataframe(), g, speed, fps)
-    print("data len: ", len(times_df))
+    times_df = preprocess_mp_alt(times_df, g, speed, fps)
+    print("df shape: ", len(times_df))
     print("time of preprocessing: ", datetime.now() - start)
-
-    if save_data:
-        times_df.to_csv('data.csv')
 
     return
 
     # ---------------------------------------------------------------------------
+
+    if save_data:
+        times_df.to_csv('data.csv')
+
+    finish = datetime.now()
+    print('doba trvani: ', finish - start)
 
     max_count = times_df['count_from'].max()
     max_to = times_df['count_to'].max()
