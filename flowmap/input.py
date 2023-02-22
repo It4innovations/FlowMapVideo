@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import networkx as nx
 
 
-def get_length(node_from_to, g):
+def get_segment_length(node_from_to, g):
     node_from, node_to = node_from_to
     data = g.get_edge_data(node_from, node_to)
     # NOTE: uncomment assert, comment returning nan
@@ -159,7 +159,7 @@ def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     df = df.groupby(['timestamp','vehicle_id']).first().reset_index()
 
     # add column with length
-    df["length"] = df[["node_from", "node_to"]].apply(get_length, axis=1, g=g)
+    df["length"] = df[["node_from", "node_to"]].apply(get_segment_length, axis=1, g=g)
 
     # NOTE: comment this later - there are segments not found in the map in the data
 
