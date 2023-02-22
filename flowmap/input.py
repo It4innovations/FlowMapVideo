@@ -5,27 +5,6 @@ from datetime import datetime, timedelta
 import networkx as nx
 
 
-def get_counts_by_offset(offset_list, section_length, road_length, count_from, count_to):
-    values_list = list(offset_list)
-    values_list.append(road_length)
-    values_list = np.bincount(np.floor_divide(values_list,section_length).astype(int))
-    values_list[0] = count_from
-    if len(values_list) > 1:
-        values_list[-1] = count_to
-    else:
-        values_list[-1] += count_to
-    return values_list
-
-
-def get_counts_half(offset_list, length):
-    length = length/2.0
-    smaller_count = 0
-    for num in offset_list:
-        if num < length:
-            smaller_count += 1
-    return (smaller_count, len(offset_list) - smaller_count)
-
-
 def get_length(node_from_to, g):
     node_from, node_to = node_from_to
     data = g.get_edge_data(node_from, node_to)
@@ -53,23 +32,6 @@ def fill_missing_offsets(row):
     if is_last_in_segment:
         return np.linspace(start, end + length, num=len(timestamps))
     return np.linspace(start, end, num=len(timestamps)+1)[:-1]
-
-
-def fill_missing(row, interval):
-    start, end = row[["timestamp", "next_timestamp"]]
-    if end == 0:  # if change of vehicle, just keep one row
-        timestamps = np.int64(start),
-    else:
-        timestamps = tuple(range(np.int64(start),np.int64(end) - 1))
-
-    start, end, is_last_in_segment, length = row[["start_offset_m", "next_offset", "last_in_segment","length"]]
-    # if change of vehicle, just keep the row untouched
-    if np.isnan(end):
-        offsets = start,
-        return timestamps, offsets
-    if is_last_in_segment:
-        return timestamps, np.linspace(start, end + length, num=len(timestamps))
-    return timestamps, np.linspace(start, end, num=len(timestamps)+1)[:-1]
 
 
 def fill_missing_rows(df, interval):
