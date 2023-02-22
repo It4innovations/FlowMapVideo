@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import networkx as nx
+from math import floor
 
 
 def get_segment_length(node_from_to, g):
@@ -87,14 +88,16 @@ def fill_missing_rows(df, interval):
     return df
 
 
-def add_counts(df):
+def add_counts(df, divide=2):
     # find out which node is the vehicle closer to
     # code for splitting each edge in half
     #
     # >>> NOTE: decide whether to use finer division or not as it influences the Pavla's work
     # NOTE: dividing the segment into halves; TODO: consider finer division
-    df['count_from'] = np.where((df['start_offset_m'] < df['length'] / 2), 1, 0)
-    df['count_to'] = np.where((df['start_offset_m'] > df['length'] / 2), 1, 0)
+    step = df['length'] / divide
+    df['counts'] = [0] * divide
+    df['counts'][floor(df['start_offset_m'] / step)] = 1
+    df[['count_from', 'count_to']] = df['counts'][0], df['counts'][-1]
 
     # create dataframe with number of vehicles for each node and timestamp
     df2 = df.groupby(['timestamp',"node_from","node_to"]).agg({'count_from': 'sum', 'count_to': 'sum'})
