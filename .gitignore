@@ -2,3 +2,9 @@
 **/data/
 **/*.svg
 *.mp4
+ruth-sim-object
+build
+flowmap/cache
+**/*.c
+**/*.pyd
+
