@@ -103,25 +103,35 @@ def fill_missing_rows(df, interval):
 def add_counts(df, divide=2):
     # find out which node is the vehicle closer to
     # code for splitting each edge in half
-    #
-    # >>> NOTE: decide whether to use finer division or not as it influences the Pavla's work
-    # NOTE: dividing the segment into halves; TODO: consider finer division
-    step = df['length'] / divide
-    df['counts'] = [0] * divide
-    df['counts'][floor(df['start_offset_m'] / step)] = 1
-    df[['count_from', 'count_to']] = df['counts'][0], df['counts'][-1]
+
+    # NOTE: dividing the segment into parts
+
+    if(divide < 2):
+        print('Division smaller than 2 is not possible, setting division to 2.')
+        divide = 2
+
+    # find out which part of the segment is the vehicle in
+    df['part'] = df['start_offset_m'] // (df['length'] / divide)
+
+    count_columns = ['counts_' + str(x) for x in range(divide - 2)]
+    count_columns[:0] = ['count_from']
+    count_columns.append('count_to')
+    df[count_columns] = pd.DataFrame([[0] * divide], index=df.index)
+
+    for i in range(divide):
+        print(count_columns[i])
+        df.loc[df['part'] == i, count_columns[i]] = 1
 
     # create dataframe with number of vehicles for each node and timestamp
-    df2 = df.groupby(['timestamp', 'node_from', 'node_to']).agg({'count_from': 'sum', 'count_to': 'sum'})
-    df2.reset_index(inplace=True)
-    df.drop('count_from', axis=1, inplace=True)
-    df.drop('count_to', axis=1, inplace=True)
+    d = {k:'sum' for k in count_columns}
+    df = df.groupby(['timestamp', 'node_from', 'node_to']).agg(d)
+    df.reset_index(inplace=True)
 
     # dataframe for "from" nodes
-    df_from = df2[['timestamp', 'node_from', 'count_from']].copy()
+    df_from = df[['timestamp', 'node_from', 'count_from']].copy()
 
     # dataframe for "to" nodes
-    df_to = df2[['timestamp', 'node_to', 'count_to']].copy()
+    df_to = df[['timestamp', 'node_to', 'count_to']].copy()
 
     # renaming for concatenation
     df_to.rename(columns = {'node_to': 'node_from', 'count_to': 'count_from'}, inplace = True)
@@ -130,13 +140,13 @@ def add_counts(df, divide=2):
     df_from = pd.concat([df_from, df_to])
     df_from = df_from.groupby(['timestamp', 'node_from']).agg({'count_from': 'sum'}, inplace=True)
 
-    # group by time, nodes and segment
-    df = df.groupby(['timestamp', 'node_from', 'node_to']).count()
+    df.drop(['count_from', 'count_to'], axis=1, inplace=True)
+    df.set_index(['timestamp', 'node_from', 'node_to'], inplace=True)
 
+    # connect node counts with segments
     df = df.join(df_from)
     df_from.rename_axis(index=['timestamp', 'node_to'], inplace=True)
     df_from.rename(columns = {'count_from': 'count_to'}, inplace = True)
-
     df = df.join(df_from)
 
     return df
@@ -175,7 +185,6 @@ def preprocess_fill_missing_times(df, g, speed=1, fps=25):
 
     # add column with length
     df['length'] = df[['node_from', 'node_to']].apply(get_segment_length, axis=1, g=g)
-
     # NOTE: comment this later - there are segments not found in the map in the data
 
     # drop rows where path hasn't been found in the graph
@@ -190,7 +199,6 @@ def preprocess_add_counts(df):
     df.sort_values(['timestamp', 'vehicle_id'], inplace=True)
     df = add_counts(df)
 
-    df.drop(['length', 'start_offset_m', 'vehicle_id'], axis=1, inplace=True)
     df.reset_index(level=['node_from', 'node_to'], inplace=True)
 
     return df
