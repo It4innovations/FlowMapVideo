@@ -3,6 +3,7 @@ import osmnx as ox
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import pathlib
 
 from math import floor
 from os import path
@@ -55,6 +56,9 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
 
 def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
+#     temp = pathlib.PosixPath
+    pathlib.PosixPath = pathlib.WindowsPath
+
     start = datetime.now()
     sim = Simulation.load(simulation_path)
     g = sim.routing_map.network
