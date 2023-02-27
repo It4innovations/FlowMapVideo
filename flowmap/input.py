@@ -26,7 +26,7 @@ class Density:
 
 
 @dataclass
-class Row: # (Record)
+class Record: # (Record)
     timestamp: int
     vehicle_id: int
     segment_id: str
@@ -57,7 +57,7 @@ class Row: # (Record)
         params['timestamp'] = timestamp
         params['start_offset_m'] = start_offset_m
 
-        return Row(**params)
+        return Record(**params)
 
 
 
@@ -75,66 +75,66 @@ def preprocess_fill_missing_times(df, graph, speed=1, fps=25):
     df['timestamp'] = df['timestamp'].div(1000 * interval).round().astype(np.int64)
     df = df.groupby(['timestamp','vehicle_id']).first().reset_index()
 
-    rows = [Row(interval=interval, **kwargs) for kwargs in df.to_dict(orient='records')]
-    rows = sorted(rows, key=lambda x: (x.vehicle_id, x.timestamp))
+    records = [Record(interval=interval, **kwargs) for kwargs in df.to_dict(orient='records')]
+    records = sorted(records, key=lambda x: (x.vehicle_id, x.timestamp))
 
-    new_rows = []
-    for i, (row, next_row) in enumerate(zip(rows[:], rows[1:] + [None])):  # TODO: row => record; processing_record & next_record
-        if next_row is None or row.vehicle_id != next_row.vehicle_id:
-            new_rows.append(row)
-            if(row.start_offset_m < row.length / 2):
-                closer_node = row.node_from
-                row.count_from = 1
+    new_records = []
+    for i, (processing_record, next_record) in enumerate(zip(records[:], records[1:] + [None])):
+        if next_record is None or processing_record.vehicle_id != next_record.vehicle_id:
+            new_records.append(processing_record)
+            if(processing_record.start_offset_m < processing_record.length / 2):
+                closer_node = processing_record.node_from
+                processing_record.count_from = 1
             else:
-                closer_node =  row.node_to
-                row.count_to = 1
+                closer_node =  processing_record.node_to
+                processing_record.count_to = 1
 
-            node_counts[(row.timestamp, closer_node)] += 1
+            node_counts[(processing_record.timestamp, closer_node)] += 1
         else:  # fill missing records
-            new_timestamps = [*range(row.timestamp, next_row.timestamp)][:-1]
+            new_timestamps = [*range(processing_record.timestamp, next_record.timestamp)][:-1]
             new_params = []
 
-            if row.segment_id == next_row.segment_id:
-                new_offsets = np.linspace(row.start_offset_m, next_row.start_offset_m, len(new_timestamps), endpoint=False)
-                processing_segments = [row] * len(new_offsets)
+            if processing_record.segment_id == next_record.segment_id:
+                new_offsets = np.linspace(processing_record.start_offset_m, next_record.start_offset_m, len(new_timestamps), endpoint=False)
+                processing_segments = [processing_record] * len(new_offsets)
             else:
                 # 1. fill missing offset between two consecutive records
-                new_offsets = np.linspace(row.start_offset_m, next_row.start_offset_m + row.length, len(new_timestamps), endpoint=False)
+                new_offsets = np.linspace(processing_record.start_offset_m, next_record.start_offset_m + processing_record.length, len(new_timestamps), endpoint=False)
                 # 2. adjust offset where the segment change
-                new_offsets = np.where(new_offsets > row.length, new_offsets - row.length, new_offsets)
-                processing_segments = np.where(new_offsets < row.length, row, next_row)
+                new_offsets = np.where(new_offsets > processing_record.length, new_offsets - processing_record.length, new_offsets)
+                processing_segments = np.where(new_offsets < processing_record.length, processing_record, next_record)
 
             new_params = zip(new_timestamps, new_offsets)
 
             closer_node = None
-            half_length_current = row.length / 2
-            half_length_next = next_row.length / 2
+            half_length_current = processing_record.length / 2
+            half_length_next = next_record.length / 2
             for segment, (timestamp, start_offset_m) in zip(processing_segments, new_params):
                     timestamp, start_offset_m = param
-                    new_row = Row.create_from_existing(timestamp, start_offset_m, segment)
-                    new_rows.append(row_new)
+                    new_record = Record.create_from_existing(timestamp, start_offset_m, segment)
+                    new_records.append(new_record)
 
                     if start_offset_m < half_length_first: # TODO: think of finer division
-                        closer_node = row.node_from
+                        closer_node = processing_record.node_from
                         # row_new.count_from = 1  # TODO: rename to 'attach_to' wihich is a number from division paramter
                     else:
-                        closer_node = row.node_to
+                        closer_node = processing_record.node_to
                     #     row_new.count_to = 1
-                    new_row.attach_to = None # TODO: compute based on division number
+                    new_record.attach_to = None # TODO: compute based on division number
                 # else:
-                #     new_row = Row.create_from_existing(timestamp, start_offset_m, next_row)
-                #     rows_new.append(row_new)
+                #     new_record = Record.create_from_existing(timestamp, start_offset_m, next_record)
+                #     records_new.append(row_new)
 
                 #     if start_offset_m < half_length_second:  # TODO: think of finer division
-                #         closer_node = new_rows[-1].node_from
+                #         closer_node = new_records[-1].node_from
                 #         row_new.count_from = 1
                 #     else:
-                #         closer_node =  new_rows[-1].node_to
+                #         closer_node =  new_records[-1].node_to
                 #         row_new.count_to = 1
 
-                counts_dict[(new_rows[-1].timestamp, closer_node)] += 1
+                counts_dict[(new_records[-1].timestamp, closer_node)] += 1
 
-    return new_rows, counts_dict
+    return new_records, counts_dict
 
 
 def preprocess_add_counts(records, counts_dict):
