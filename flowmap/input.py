@@ -35,8 +35,6 @@ class Record: # (Record)
     status: str
     node_from: int
     node_to: int
-    count_from: int = 0
-    count_to: int = 0
     length: InitVar[float] = None
     graph: InitVar[Graph] = None
 
@@ -84,10 +82,8 @@ def preprocess_fill_missing_times(df, graph, speed=1, fps=25):
             new_records.append(processing_record)
             if(processing_record.start_offset_m < processing_record.length / 2):
                 closer_node = processing_record.node_from
-                processing_record.count_from = 1
             else:
                 closer_node =  processing_record.node_to
-                processing_record.count_to = 1
 
             node_counts[(processing_record.timestamp, closer_node)] += 1
         else:  # fill missing records
@@ -116,10 +112,8 @@ def preprocess_fill_missing_times(df, graph, speed=1, fps=25):
 
                     if start_offset_m < half_length_first: # TODO: think of finer division
                         closer_node = processing_record.node_from
-                        # row_new.count_from = 1  # TODO: rename to 'attach_to' wihich is a number from division paramter
                     else:
                         closer_node = processing_record.node_to
-                    #     row_new.count_to = 1
                     new_record.attach_to = None # TODO: compute based on division number
                 # else:
                 #     new_record = Record.create_from_existing(timestamp, start_offset_m, next_record)
