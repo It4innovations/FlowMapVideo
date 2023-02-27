@@ -41,7 +41,7 @@ class Row: # (Record)
     graph: InitVar[Graph] = None
 
     def __post_init__(self, length, graph):
-        self.length = length;
+        self.length = length
 
         if length is None and (self.node_from is not None or self.node_to is not None):
             data = graph.get_edge_data(self.node_from, self.node_to)
@@ -140,14 +140,15 @@ def preprocess_fill_missing_times(df, graph, speed=1, fps=25):
 def preprocess_add_counts(records, counts_dict):
     density_list = []
     records = sorted(records, key=lambda x: (x.timestamp, x.node_from, x.node_to))
-    for key, _ in groupby(records, lambda x: (x.timestamp, x.node_from, x.node_to)):
+
+    for (timestamp, node_from, node_to), _ in groupby(records, lambda x: (x.timestamp, x.node_from, x.node_to)):
         count_from = 0
         count_to = 0
-        if (key[0], key[1]) in counts_dict:
-            count_from = counts_dict[(key[0], key[1])]
-        if (key[0], key[2]) in counts_dict:
-            count_to = counts_dict[(key[0], key[2])]
-        density_list.append(Density(key[0],key[1],key[2], count_from, count_to))
+        if (timestamp, node_from) in counts_dict:
+            count_from = counts_dict[(timestamp, node_from)]
+        if (timestamp, node_to) in counts_dict:
+            count_to = counts_dict[(timestamp, node_to)]
+        density_list.append(Density(timestamp,node_from, node_to, count_from, count_to))
 
     return density_list
 
