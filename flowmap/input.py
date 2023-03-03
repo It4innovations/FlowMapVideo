@@ -17,12 +17,10 @@ class Density:
     """Segment in time with count of vehicles on left and right side of the segment."""
 
     # TODO: find out a better name!
-    #
     timestamp: int
     node_from: int
     node_to: int
-    count_from: int
-    count_to: int
+    counts: list
 
 
 @dataclass
@@ -58,14 +56,22 @@ class Record:
         return Record(**params)
 
 
+def add_count_to_dictionary(record, divide, edge_counts, node_counts):
+    part_of_edge = record.start_offset_m // (record.length / divide)
 
-def preprocess_fill_missing_times(df, graph, speed=1, fps=25):
+    if part_of_edge == 0:
+        node_counts[(record.timestamp, record.node_from)] += 1
+    elif part_of_edge == (divide - 1):
+        node_counts[(record.timestamp, record.node_to)] += 1
+    else:
+        edge_counts[(record.timestamp, record.node_from, record.node_to, part_of_edge)] += 1
 
+
+def preprocess_fill_missing_times(df, graph, speed=1, fps=25, divide=2):
     node_counts = defaultdict(lambda: 0)
+    edge_counts = defaultdict(lambda: 0)
 
     interval = speed / fps
-
-    start = datetime.now()
 
     # change datetime to int
     df['timestamp']= to_datetime(df['timestamp']).astype(np.int64)//10**6 # resolution in milliseconds
@@ -80,12 +86,9 @@ def preprocess_fill_missing_times(df, graph, speed=1, fps=25):
     for i, (processing_record, next_record) in enumerate(zip(records[:], records[1:] + [None])):
         if next_record is None or processing_record.vehicle_id != next_record.vehicle_id:
             new_records.append(processing_record)
-            if(processing_record.start_offset_m < processing_record.length / 2):
-                closer_node = processing_record.node_from
-            else:
-                closer_node =  processing_record.node_to
 
-            node_counts[(processing_record.timestamp, closer_node)] += 1
+            add_count_to_dictionary(processing_record, divide, edge_counts, node_counts)
+
         else:  # fill missing records
             new_timestamps = [*range(processing_record.timestamp, next_record.timestamp)]
             new_params = []
@@ -107,40 +110,32 @@ def preprocess_fill_missing_times(df, graph, speed=1, fps=25):
                 new_record = Record.create_from_existing(timestamp, start_offset_m, segment)
                 new_records.append(new_record)
 
-                if start_offset_m < (segment.length / 2): # TODO: think of finer division
-                    closer_node = segment.node_from
-                else:
-                    closer_node = segment.node_to
+                add_count_to_dictionary(segment, divide, edge_counts, node_counts)
 
-                node_counts[(new_records[-1].timestamp, closer_node)] += 1
-
-    return new_records, node_counts
+    return new_records, node_counts, edge_counts
 
 
-def preprocess_add_counts(records, node_counts):
+def preprocess_add_counts(records, node_counts, edge_counts, divide):
     density_list = []
     records = sorted(records, key=lambda x: (x.timestamp, x.node_from, x.node_to))
 
     for (timestamp, node_from, node_to), _ in groupby(records, lambda x: (x.timestamp, x.node_from, x.node_to)):
-        count_from = 0
-        count_to = 0
-        if (timestamp, node_from) in node_counts:
-            count_from = node_counts[(timestamp, node_from)]
-        if (timestamp, node_to) in node_counts:
-            count_to = node_counts[(timestamp, node_to)]
-        density_list.append(Density(timestamp,node_from, node_to, count_from, count_to))
+        counts = [node_counts[(timestamp, node_from)]]
+        for part_of_edge in range(1, divide - 1):
+            counts.append(edge_counts[(timestamp, node_from, node_to, part_of_edge)])
+        counts.append(node_counts[(timestamp, node_to)])
+
+        density_list.append(Density(timestamp, node_from, node_to, counts))
 
     return density_list
 
 
-def preprocess_history_records(df, g, speed=1, fps=25):
-    start = datetime.now()
-    records, node_counts = preprocess_fill_missing_times(df, g, speed, fps)
-    print("rows filled in: ", datetime.now() - start)
+def preprocess_history_records(df, g, speed=1, fps=25, divide=2):
+    if(divide < 2):
+        print('Division smaller than 2 is not possible, setting division to 2.')
+        divide = 2
 
-    start2 = datetime.now()
-    density_list = preprocess_add_counts(records, node_counts)
-    print(df.shape)
-    print("counts added in: ", datetime.now() - start2)
-    print("total time: ", datetime.now() - start)
+    records, node_counts, edge_counts = preprocess_fill_missing_times(df, g, speed, fps, divide)
+    density_list = preprocess_add_counts(records, node_counts, edge_counts, divide)
+
     return density_list
