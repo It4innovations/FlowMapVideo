@@ -54,7 +54,6 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
               help="Adjust width.")
 @click.option('--title','-t', default="", help='Set video title')
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
-# TODO: add option for fps
 
 def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
 
