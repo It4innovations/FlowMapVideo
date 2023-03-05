@@ -103,7 +103,6 @@ def add_counts(df, divide=2):
     df[count_columns] = pd.DataFrame([[0] * divide], index=df.index)
 
     for i in range(divide):
-        print(count_columns[i])
         df.loc[df['part'] == i, count_columns[i]] = 1
 
     # create dataframe with number of vehicles for each node and timestamp
@@ -136,14 +135,14 @@ def add_counts(df, divide=2):
     return df
 
 
-def preprocess_history_records(df, g, speed=1, fps=25, version=1):
+def preprocess_history_records(df, g, speed=1, fps=25, divide=2):
     start = datetime.now()
     df = preprocess_fill_missing_times(df, g, speed, fps)
     print(df.shape)
     print("rows filled in: ", datetime.now() - start)
 
     start2 = datetime.now()
-    df = preprocess_add_counts(df)
+    df = preprocess_add_counts(df, divide)
     print(df.shape)
     print("counts added in: ", datetime.now() - start2)
     print("total time: ", datetime.now() - start)
@@ -154,7 +153,6 @@ def preprocess_history_records(df, g, speed=1, fps=25, version=1):
 def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     interval = speed / fps
     df = df.loc[(df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (df['timestamp'] < np.datetime64('2021-06-16T09:00:00.000')),:]
-    print('data loaded')
     start = datetime.now()
 
     df = df[['timestamp', 'node_from', 'node_to', 'vehicle_id', 'start_offset_m']].copy()
@@ -181,8 +179,7 @@ def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     return df
 
 
-def preprocess_add_counts(df):
-
+def preprocess_add_counts(df, divide=2):
     df.sort_values(['timestamp', 'vehicle_id'], inplace=True)
     df = add_counts(df)
 
