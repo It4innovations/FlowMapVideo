@@ -11,6 +11,7 @@ from os import path
 from matplotlib import animation
 from datetime import datetime
 from time import time
+from functools import partial
 from ruth.simulator import Simulation
 
 from flowmapviz.collection_plot import plot_routes, WidthStyle
@@ -20,12 +21,12 @@ from df import get_max_vehicle_count, get_max_time, get_min_time
 from ax_settings import Ax_settings
 
 
-def preprocess_fill_mp(res_list, id, df, g, speed, fps):
-    res_list[id] = preprocess_fill_missing_times(df, g, speed, fps)
+def preprocess_fill_mp(df, g, speed, fps):
+    return preprocess_fill_missing_times(df, g, speed, fps)
 
 
-def preprocess_counts_mp(res_list, id, df, g, speed, fps):
-    res_list[id] = preprocess_add_counts(df)
+def preprocess_counts_mp(df, g, speed, fps):
+    return preprocess_add_counts(df)
 
 
 def preprocess_mp(df, g, speed, fps):
@@ -45,42 +46,66 @@ def preprocess_mp(df, g, speed, fps):
     df_list = manager.list()
     df_list.extend([None] * num_of_processes)
 
-    processes = []
+    args = [df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]),:] for i in range(cpu_count)]
+    fill_mp_partial = partial(preprocess_fill_mp, g=g, speed=speed, fps=fps)
+    counts_mp_partial = partial(preprocess_counts_mp, g=g, speed=speed, fps=fps)
 
-    for i in range(num_of_processes):
-      p = mp.Process(target = preprocess_fill_mp,args = (df_list, i, df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]),:] , g, speed, fps))
-      p.start()
-      processes.append(p)
+    with Pool(cpu_count) as pool:
+        df_list = []
 
-    for process in processes:
-          process.join()
+        for result in pool.map(fill_mp_partial, args):
+            df_list.append(result)
 
+        df = pd.concat(df_list)
+        print(df_list)
 
-    df = pd.concat(df_list)
-    print("rows filled in: ", datetime.now() - start)
+        number_of_rows = df.shape[0]
+        one_df_rows = round(number_of_rows / num_of_processes)
+        split_datetimes = [df.iloc[x * one_df_rows]['timestamp'] for x in range(num_of_processes)]
+        split_datetimes.append(df.iloc[-1]['timestamp'] + 1)
 
-    start2 = datetime.now()
-    df.sort_values(['timestamp'], inplace=True)
+        df_list = []
 
-    number_of_rows = df.shape[0]
-    one_df_rows = round(number_of_rows / num_of_processes)
-    split_datetimes = [df.iloc[x * one_df_rows]['timestamp'] for x in range(num_of_processes)]
-    split_datetimes.append(df.iloc[-1]['timestamp'] + 1)
-    processes = []
+        for result in pool.map(counts_mp_partial, args):
+            df_list.append(result)
 
-    for i in range(num_of_processes):
-          p = mp.Process(target = preprocess_counts_mp,args = (df_list, i, df.loc[(df['timestamp'] >= split_datetimes[i]) & (df['timestamp'] < split_datetimes[i + 1]),:] , g, speed, fps))
-          p.start()
-          processes.append(p)
+        df = pd.concat(df_list)
 
-    for process in processes:
-          process.join()
-
-    df = pd.concat(df_list)
-    print(df.shape)
-    print("counts added in: ", datetime.now() - start2)
-    print("total time: ", datetime.now() - start)
+    print(df)
     return df
+#     processes = []
+
+#     for i in range(num_of_processes):
+#       p = mp.Process(target = preprocess_fill_mp, args = (df_list, i, df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]),:] , g, speed, fps))
+#       p.start()
+#       processes.append(p)
+#
+#     for process in processes:
+#           process.join()
+#
+#
+#     df = pd.concat(df_list)
+#     print("rows filled in: ", datetime.now() - start)
+
+#     start2 = datetime.now()
+#     df.sort_values(['timestamp'], inplace=True)
+
+
+#     processes = []
+#
+#     for i in range(num_of_processes):
+#           p = mp.Process(target = preprocess_counts_mp,args = (df_list, i, df.loc[(df['timestamp'] >= split_datetimes[i]) & (df['timestamp'] < split_datetimes[i + 1]),:] , g, speed, fps))
+#           p.start()
+#           processes.append(p)
+#
+#     for process in processes:
+#           process.join()
+#
+#     df = pd.concat(df_list)
+#     print(df.shape)
+#     print("counts added in: ", datetime.now() - start2)
+#     print("total time: ", datetime.now() - start)
+#     return df
 
 
 def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
