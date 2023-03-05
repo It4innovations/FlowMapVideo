@@ -12,6 +12,7 @@ from matplotlib import animation
 from datetime import datetime
 from time import time
 from ruth.simulator import Simulation
+from multiprocessing.pool import Pool
 
 from flowmapviz.collection_plot import plot_routes, WidthStyle
 
@@ -21,12 +22,13 @@ from df import get_max_vehicle_count, get_max_time, get_min_time
 from ax_settings import Ax_settings
 
 
-def preprocess_fill_mp_alt(res_list, id, df, g, speed, fps, lock, counts_dict):
-    res_list[id], _ = preprocess_fill_missing_times(df, g, speed, fps, counts_dict, lock)
+def preprocess_fill_mp_alt(df, g, speed, fps, lock, counts_dict):
+    res, _, _ = preprocess_fill_missing_times(df, g, speed, fps, counts_dict, lock)
+    return res
 
 
-def preprocess_counts_mp_alt(res_list, id, records, g, speed, fps, counts_dict):
-    res_list[id] = preprocess_add_counts(records, counts_dict)
+def preprocess_counts_mp_alt(records, g, speed, fps, counts_dict):
+    return preprocess_add_counts(records, counts_dict)
 
 
 def preprocess_mp_alt(df, g, speed, fps):
@@ -43,53 +45,43 @@ def preprocess_mp_alt(df, g, speed, fps):
 
     lock = mp.Lock()
     manager = mp.Manager()
-    res_list = manager.list()
     counts_dict = manager.dict()
-    res_list.extend([None] * num_of_processes)
+    res_list = [None] * num_of_processes
+    fill_mp_partial = partial(preprocess_fill_mp_alt, g=g, speed=speed, fps=fps, lock=lock, counts_dict=counts_dict)
+    counts_mp_partial = partial(preprocess_counts_mp_alt, g=g, speed=speed, fps=fps, counts_dict=counts_dict)
+    args = [df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]), :] for i in range(num_of_processes)]
 
-    processes = []
-    for i in range(num_of_processes):
-        p = mp.Process(target = preprocess_fill_mp_alt,args = (res_list, i, df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]),:] , g, speed, fps, lock, counts_dict))
-        p.start()
-        processes.append(p)
+    with Pool(num_of_processes) as pool:
+        df_list = []
 
-    for process in processes:
-        process.join()
+        for result in pool.map(fill_mp_partial, args):
+            df_list.append(result)
 
-    res_list_conc = list(itertools.chain.from_iterable(res_list))
-    res_list_conc = sorted(res_list_conc, key=lambda x: x.timestamp)
-    print("rows filled in: ", datetime.now() - start)
+        res_list_conc = list(itertools.chain.from_iterable(res_list))
+        res_list_conc = sorted(res_list_conc, key=lambda x: x.timestamp)
 
-    start2 = datetime.now()
+        number_of_rows = len(res_list_conc)
+        one_df_rows = round(number_of_rows / num_of_processes)
+        split_datetimes = [res_list_conc[x * one_df_rows].timestamp for x in range(num_of_processes)]
 
-    number_of_rows = len(res_list_conc)
-    one_df_rows = round(number_of_rows / num_of_processes)
-    split_datetimes = [res_list_conc[x * one_df_rows].timestamp for x in range(num_of_processes)]
+        args = []
+        for i in range(num_of_processes):
+            current_list = []
+            if i == num_of_processes - 1:
+                current_list = res_list_conc[j:]
+            else:
+                for k in range(j, len(res_list_conc)):
+                    if res_list_conc[k].timestamp > split_datetimes[i + 1]:
+                        break
+                    current_list.append(res_list_conc[k])
+                    j += 1
+            args.append(current_list)
 
-    processes = []
-    j = 0
-
-    for i in range(num_of_processes):
-        current_list = []
-        if i == num_of_processes - 1:
-            current_list = res_list_conc[j:]
-        else:
-            for k in range(j, len(res_list_conc)):
-                if res_list_conc[k].timestamp > split_datetimes[i + 1]:
-                    break
-                current_list.append(res_list_conc[k])
-                j += 1
-        p = mp.Process(target = preprocess_counts_mp_alt,args = (res_list, i, current_list, g, speed, fps, counts_dict))
-        p.start()
-        processes.append(p)
-
-    for process in processes:
-        process.join()
+        res_list = []
+        for result in pool.map(fill_mp_partial, args):
+            res_list.append(result)
 
     res_list = list(itertools.chain.from_iterable(res_list))
-    print("counts added in: ", datetime.now() - start2)
-    print("total time: ", datetime.now() - start)
-    print("full len mp: ", len(res_list))
     return res_list
 
 
