@@ -62,7 +62,10 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
     g = sim.routing_map.network
 
     start = datetime.now()
-    times_df = preprocess_history_records(sim.history.to_dataframe(), g, speed, fps)
+    t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps)  # TODO: add divide
+    # TODO: process t_segments
+    # sth. like: t_segments = sorted(t_segments, key=lambda tseg: tseg.timestam), or intertools.gropby
+    #            [t_seg.counts() for t_seg in t_segments]
     print("data len: ", len(times_df))
     print("time of preprocessing: ", datetime.now() - start)
 

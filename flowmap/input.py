@@ -1,3 +1,4 @@
+
 from collections import defaultdict
 from dataclasses import dataclass, InitVar, asdict, field
 from datetime import datetime, timedelta
@@ -11,16 +12,57 @@ from itertools import groupby
 import gc
 import numpy as np
 from networkx import MultiDiGraph as Graph
+from typing import NewType
+
+from ruth.metaclasses import Singleton
+
+
+NodeId = NewType("NodeId", int)
+
 
 @dataclass
-class Density:
-    """Segment in time with count of vehicles on left and right side of the segment."""
-
-    # TODO: find out a better name!
+class NodeInTime(metaclass=Singleton):
+    id: NodeId
     timestamp: int
-    node_from: int
-    node_to: int
-    counts: list
+
+    def __post_init__(self):
+        self.vehicle_count = 0
+
+    def add_vehicle(self):
+        self.vehicle_count += 1
+
+
+@dataclass
+class SegmentInTime(metaclass=Singleton):
+
+    node_from: NodeInTime = field(init=False)
+    node_to: NodeInTime = field(init=False)
+
+    node_from_: InitVar[NodeId]
+    node_to_: InitVar[NodeId]
+    timestamp: InitVar[int]
+    divide: InitVar[int]
+
+    def __post_init__(self, node_from_: int, node_to_: int, timestamp, divide):
+        self.node_from = Node(node_from, timestamp)
+        self.node_to = Node(node_to, timestamp)
+        self.inner_counts = [0] * (divide - 2)  # -2 for two nodes
+
+    def add_vehicle(self, division):
+        if division == 0:
+            self.node_from.add_vehicle()
+        elif division == divide - 1:
+            self.node_to.add_vehicle()
+        else:
+            self.inner_counts[division - 1] += 1  # -1 for node_from
+
+    @property
+    def timestamp(self):
+        return self.node_from.timestamp
+
+    @property
+    def counts(self):
+        return [self.node_from.vehicle_count, *self.inner_counts, self.node_to.vehicle_count]
 
 
 @dataclass
@@ -31,8 +73,8 @@ class Record:
     start_offset_m: float
     speed_mps: float
     status: str
-    node_from: int
-    node_to: int
+    node_from: NodeId
+    node_to: NodeId
     length: InitVar[float] = None
     graph: InitVar[Graph] = None
 
@@ -56,20 +98,22 @@ class Record:
         return Record(**params)
 
 
-def add_count_to_dictionary(record, divide, edge_counts, node_counts):
-    part_of_edge = record.start_offset_m // (record.length / divide)
+def add_vehicle(record, divide):
+    """Add vehicle to **singleton** segment in time element."""
 
-    if part_of_edge == 0:
-        node_counts[(record.timestamp, record.node_from)] += 1
-    elif part_of_edge == (divide - 1):
-        node_counts[(record.timestamp, record.node_to)] += 1
-    else:
-        edge_counts[(record.timestamp, record.node_from, record.node_to, part_of_edge)] += 1
+    t_seg = SegmentInTime(record.node_from,
+                            record.node_to,
+                            record.timestamp, divide)
+    step = record.length / divide
+    t_seg.add_vehicle(record.start_offset_m // step)
+
+    return t_seg
 
 
-def preprocess_fill_missing_times(df, graph, speed=1, fps=25, divide=2):
-    node_counts = defaultdict(lambda: 0)
-    edge_counts = defaultdict(lambda: 0)
+def fill_missing_times(df, graph, speed=1, fps=25, divide=2):
+    assert divide >= 2, f"Invalid value of divide '{divide}'. It must be greater or equal to 2."
+
+    t_segments = set()
 
     interval = speed / fps
 
@@ -82,13 +126,9 @@ def preprocess_fill_missing_times(df, graph, speed=1, fps=25, divide=2):
     records = [Record(**kwargs, graph=graph) for kwargs in df.to_dict(orient='records')]
     records = sorted(records, key=lambda x: (x.vehicle_id, x.timestamp))
 
-    new_records = []
     for i, (processing_record, next_record) in enumerate(zip(records[:], records[1:] + [None])):
         if next_record is None or processing_record.vehicle_id != next_record.vehicle_id:
-            new_records.append(processing_record)
-
-            add_count_to_dictionary(processing_record, divide, edge_counts, node_counts)
-
+            t_segments.add(add_vehicle(processing_record, divide))
         else:  # fill missing records
             new_timestamps = [*range(processing_record.timestamp, next_record.timestamp)]
             new_params = []
@@ -105,37 +145,7 @@ def preprocess_fill_missing_times(df, graph, speed=1, fps=25, divide=2):
 
             new_params = zip(new_timestamps, new_offsets)
 
-            closer_node = None
-            for segment, (timestamp, start_offset_m) in zip(processing_segments, new_params):
-                new_record = Record.create_from_existing(timestamp, start_offset_m, segment)
-                new_records.append(new_record)
+            for record, (timestamp, start_offset_m) in zip(processing_segments, new_params):
+                t_segments.add(add_vehicle(record, divide))
 
-                add_count_to_dictionary(segment, divide, edge_counts, node_counts)
-
-    return new_records, node_counts, edge_counts
-
-
-def preprocess_add_counts(records, node_counts, edge_counts, divide):
-    density_list = []
-    records = sorted(records, key=lambda x: (x.timestamp, x.node_from, x.node_to))
-
-    for (timestamp, node_from, node_to), _ in groupby(records, lambda x: (x.timestamp, x.node_from, x.node_to)):
-        counts = [node_counts[(timestamp, node_from)]]
-        for part_of_edge in range(1, divide - 1):
-            counts.append(edge_counts[(timestamp, node_from, node_to, part_of_edge)])
-        counts.append(node_counts[(timestamp, node_to)])
-
-        density_list.append(Density(timestamp, node_from, node_to, counts))
-
-    return density_list
-
-
-def preprocess_history_records(df, g, speed=1, fps=25, divide=2):
-    if(divide < 2):
-        print('Division smaller than 2 is not possible, setting division to 2.')
-        divide = 2
-
-    records, node_counts, edge_counts = preprocess_fill_missing_times(df, g, speed, fps, divide)
-    density_list = preprocess_add_counts(records, node_counts, edge_counts, divide)
-
-    return density_list
+    return t_segments
