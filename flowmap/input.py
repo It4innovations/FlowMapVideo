@@ -94,6 +94,8 @@ def add_counts(df, divide=2):
         print('Division smaller than 2 is not possible, setting division to 2.')
         divide = 2
 
+
+
     # find out which part of the segment is the vehicle in
     df['part'] = df['start_offset_m'] // (df['length'] / divide)
 
@@ -152,7 +154,6 @@ def preprocess_history_records(df, g, speed=1, fps=25, divide=2):
 
 def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     interval = speed / fps
-    df = df.loc[(df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (df['timestamp'] < np.datetime64('2021-06-16T09:00:00.000')),:]
     start = datetime.now()
 
     df = df[['timestamp', 'node_from', 'node_to', 'vehicle_id', 'start_offset_m']].copy()
@@ -176,12 +177,17 @@ def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     df.dropna(subset=['length'], inplace=True)
 
     df = fill_missing_rows(df, interval)
+
+    mask = df['node_from'] > df['node_to']
+    df.loc[mask, 'start_offset_m'] = df['length'] - df['start_offset_m']
+    df.loc[mask, ['node_from', 'node_to']] = (df.loc[mask, ['node_to', 'node_from']].values)
+
     return df
 
 
 def preprocess_add_counts(df, divide=2):
     df.sort_values(['timestamp', 'vehicle_id'], inplace=True)
-    df = add_counts(df)
+    df = add_counts(df, divide)
 
     df.reset_index(level=['node_from', 'node_to'], inplace=True)
 

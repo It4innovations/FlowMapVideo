@@ -26,15 +26,16 @@ def preprocess_fill_mp(df, g, speed, fps):
     return preprocess_fill_missing_times(df, g, speed, fps)
 
 
-def preprocess_counts_mp(df, g, speed, fps):
-    return preprocess_add_counts(df)
+def preprocess_counts_mp(df, g, speed, fps, divide):
+    return preprocess_add_counts(df, divide)
 
 
-def preprocess_mp(df, g, speed, fps):
+def preprocess_mp(df, g, speed, fps, divide):
     start = datetime.now()
 
     cpu_count = mp.cpu_count()
     num_of_processes = cpu_count
+    df.sort_values(['vehicle_id', 'timestamp'], inplace=True)
 
     min_vehicle_id = df['vehicle_id'].min()
     max_vehicle_id = df['vehicle_id'].max()
@@ -47,7 +48,7 @@ def preprocess_mp(df, g, speed, fps):
 
     args = [df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]),:] for i in range(cpu_count)]
     fill_mp_partial = partial(preprocess_fill_mp, g=g, speed=speed, fps=fps)
-    counts_mp_partial = partial(preprocess_counts_mp, g=g, speed=speed, fps=fps)
+    counts_mp_partial = partial(preprocess_counts_mp, g=g, speed=speed, fps=fps, divide=divide)
 
     with Pool(cpu_count) as pool:
         df_list = []
@@ -108,8 +109,9 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
               help="Adjust width.")
 @click.option('--title','-t', default="", help='Set video title')
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
+@click.option('--divide', '-d', default=2, help="Into how many parts will each segment be split.", show_default=True)
 
-def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
+def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
 #     temp = pathlib.PosixPath
     pathlib.PosixPath = pathlib.WindowsPath
 
@@ -118,13 +120,15 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
     g = sim.routing_map.network
     times_df = sim.history.to_dataframe()  # NOTE: this method has some non-trivial overhead
 #     times_df = sim.global_view.to_dataframe()  # NOTE: this method has some non-trivial overhead
-    times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:01:00.000')),:]
-
+#     times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:01:00.000')),:]
+    times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:05:00.000')),:]
+    print(times_df.shape)
     start = datetime.now()
-    times_df = preprocess_mp(times_df, g, speed, fps)
+    times_df = preprocess_mp(times_df, g, speed, fps, divide)
     print("df shape: ", times_df.shape)
     print("time of preprocessing: ", datetime.now() - start)
 
+    return
     if save_data:
         times_df.to_csv('data.csv')
 
