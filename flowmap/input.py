@@ -100,15 +100,18 @@ def fill_missing_rows(df, interval):
     return df
 
 
-def add_counts(df, divide=2):
+def preprocess_add_counts(df, divide=2):
     # find out which node is the vehicle closer to
     # code for splitting each edge in half
 
     # NOTE: dividing the segment into parts
 
-    if(divide < 2):
-        print('Division smaller than 2 is not possible, setting division to 2.')
-        divide = 2
+    assert divide >= 2, f"Invalid value of divide '{divide}'. It must be greater or equal to 2."
+    df.sort_values(['timestamp', 'vehicle_id'], inplace=True)
+
+    mask = df['node_from'] > df['node_to']
+    df.loc[mask, 'start_offset_m'] = df['length'] - df['start_offset_m']
+    df.loc[mask, ['node_from', 'node_to']] = (df.loc[mask, ['node_to', 'node_from']].values)
 
     # find out which part of the segment is the vehicle in
     df['part'] = df['start_offset_m'] // (df['length'] / divide)
@@ -119,7 +122,6 @@ def add_counts(df, divide=2):
     df[count_columns] = pd.DataFrame([[0] * divide], index=df.index)
 
     for i in range(divide):
-        print(count_columns[i])
         df.loc[df['part'] == i, count_columns[i]] = 1
 
     # create dataframe with number of vehicles for each node and timestamp
@@ -148,21 +150,7 @@ def add_counts(df, divide=2):
     df_from.rename_axis(index=['timestamp', 'node_to'], inplace=True)
     df_from.rename(columns = {'count_from': 'count_to'}, inplace = True)
     df = df.join(df_from)
-
-    return df
-
-
-def preprocess_history_records(df, g, speed=1, fps=25, version=1):
-    start = datetime.now()
-    df = preprocess_fill_missing_times(df, g, speed, fps)
-    print(df.shape)
-    print("rows filled in: ", datetime.now() - start)
-
-    start2 = datetime.now()
-    df = preprocess_add_counts(df)
-    print(df.shape)
-    print("counts added in: ", datetime.now() - start2)
-    print("total time: ", datetime.now() - start)
+    df = df.reset_index().set_index('timestamp')
 
     return df
 
@@ -194,11 +182,17 @@ def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     return df
 
 
-def preprocess_add_counts(df):
+def preprocess_history_records(df, g, speed=1, fps=25, divide=2):
+    assert divide >= 2, f"Invalid value of divide '{divide}'. It must be greater or equal to 2."
 
-    df.sort_values(['timestamp', 'vehicle_id'], inplace=True)
-    df = add_counts(df)
+    start = datetime.now()
+    df = preprocess_fill_missing_times(df, g, speed, fps)
+    print("rows filled in: ", datetime.now() - start)
 
-    df.reset_index(level=['node_from', 'node_to'], inplace=True)
+    start2 = datetime.now()
+    df = preprocess_add_counts(df, divide)
+    print(df.shape)
+    print("counts added in: ", datetime.now() - start2)
+    print("total time: ", datetime.now() - start)
 
     return df
