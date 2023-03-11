@@ -46,16 +46,17 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
 @click.option('--save-path', default="", help='Path to the folder for the output video.')
 @click.option('--frame-start', default=0, help="Number of frames to skip before plotting.")
 @click.option('--frames-len', help="Number of frames to plot")
-@click.option('--processed-data','-p', is_flag=True, help="Data is already processed")
-@click.option('--save-data','-s', is_flag=True, help="Save processed data")
+@click.option('--processed-data', '-p', is_flag=True, help="Data is already processed")
+@click.option('--save-data', '-s', is_flag=True, help="Save processed data")
 @click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='CALLIGRAPHY',
               help="Choose style of width plotting")
 @click.option('--width-modif', default=10, type=click.IntRange(2, 200, clamp=True), show_default=True,
               help="Adjust width.")
-@click.option('--title','-t', default="", help='Set video title')
+@click.option('--title', '-t', default="", help='Set video title')
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
+@click.option('--divide', '-d', default=2, help="Into how many parts will each segment be split.", show_default=True)
 
-def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
+def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
 #     temp = pathlib.PosixPath
     pathlib.PosixPath = pathlib.WindowsPath
 
@@ -67,7 +68,7 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
     times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:01:00.000')),:]
 
     start = datetime.now()
-    times_df = preprocess_history_records(times_df, g, speed, fps)
+    times_df = preprocess_history_records(times_df, g, speed, fps, divide)
     print("df shape: ", times_df.shape)
     print("time of preprocessing: ", datetime.now() - start)
 

@@ -20,12 +20,11 @@ def get_segment_length(node_from_to, g):
     return data['length']
 
 
-def fill_missing_rows(df, interval):
+def fill_missing_rows(df):
     # add missing times
     df.sort_values(['vehicle_id', 'timestamp'], inplace=True)
     df['next_timestamp'] = df['timestamp'].shift(-1, fill_value=0)
     df['next_offset'] = df['start_offset_m'].shift(-1).astype('float')
-
     # true if a vehicle changes the semgent
     mask = (df.node_from != df.node_from.shift(-1)) | (df.node_to != df.node_to.shift(-1))
 
@@ -38,12 +37,8 @@ def fill_missing_rows(df, interval):
     df.loc[mask,'next_offset'] = -1
 
     # now timestamp contains a list of timestamps which will be unrolled later
-#     df['timestamp'] = df.apply(lambda row: fill_missing_timestamps(row, interval), axis=1)
-    df['timestamp'] = df.apply(lambda row: ci.fill_missing_timestamps_cython(row['timestamp'], row['next_timestamp'], interval), axis=1)
-#     print(df.loc[df['timestamp3'] != df['timestamp2'],:])
+    df['timestamp'] = df.apply(lambda row: ci.fill_missing_timestamps_cython(row['timestamp'], row['next_timestamp']), axis=1)
     df['start_offset_m'] = df.apply(lambda row: ci.fill_missing_offsets_cython(row['start_offset_m'], row['next_offset'], row['last_in_segment'], len(row["timestamp"]),row["length"]), axis=1)
-#     df['start_offset_m'] = df.apply(lambda row: fill_missing_offsets(row), axis=1)
-
     df[['next_node_from', 'next_node_to', 'next_length', 'next_vehicle_id']] = df[['node_from', 'node_to', 'length', 'vehicle_id']].shift(-1, fill_value=0)
 
     # drop unnecessary columns
@@ -51,14 +46,19 @@ def fill_missing_rows(df, interval):
 
     # <<< end of change vehicle
     df = df.explode(column=['timestamp', 'start_offset_m'])
-
     df.reset_index(inplace=True)
 
     df[['new_node_from', 'new_node_to', 'new_start_offset_m', 'new_length']] = df[['node_from', 'node_to', 'start_offset_m', 'length']]
 
     # the change of segment
     mask = (df['start_offset_m'] > df['length']) & (df['next_vehicle_id'] == df['vehicle_id'])
-    df.loc[mask, ['new_node_from', 'new_node_to', 'new_length']] = df.loc[mask, ['next_node_from', 'next_node_to', 'next_length']]
+    column_pairs = zip(
+        ['new_node_from', 'new_node_to', 'new_length'],
+        ['next_node_from', 'next_node_to', 'next_length'])
+
+    for column_new, column_next in column_pairs:
+        df.loc[mask, column_new] = df.loc[mask, column_next]
+
     df.loc[mask, 'new_start_offset_m'] = df.loc[mask, 'start_offset_m'] - df.loc[mask, 'length']
 
     df.drop([
@@ -78,8 +78,6 @@ def fill_missing_rows(df, interval):
         'new_start_offset_m': 'start_offset_m',
         'new_length': 'length'
     }, inplace = True)
-
-    df.dropna(inplace=True)
 
     return df
 
@@ -103,7 +101,6 @@ def add_counts(df, divide=2):
     df[count_columns] = pd.DataFrame([[0] * divide], index=df.index)
 
     for i in range(divide):
-        print(count_columns[i])
         df.loc[df['part'] == i, count_columns[i]] = 1
 
     # create dataframe with number of vehicles for each node and timestamp
@@ -136,14 +133,15 @@ def add_counts(df, divide=2):
     return df
 
 
-def preprocess_history_records(df, g, speed=1, fps=25, version=1):
+def preprocess_history_records(df, g, speed=1, fps=25, divide=2):
     start = datetime.now()
     df = preprocess_fill_missing_times(df, g, speed, fps)
     print(df.shape)
     print("rows filled in: ", datetime.now() - start)
 
     start2 = datetime.now()
-    df = preprocess_add_counts(df)
+    df = preprocess_add_counts(df, divide)
+
     print(df.shape)
     print("counts added in: ", datetime.now() - start2)
     print("total time: ", datetime.now() - start)
@@ -153,8 +151,6 @@ def preprocess_history_records(df, g, speed=1, fps=25, version=1):
 
 def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     interval = speed / fps
-    df = df.loc[(df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (df['timestamp'] < np.datetime64('2021-06-16T09:00:00.000')),:]
-    print('data loaded')
     start = datetime.now()
 
     df = df[['timestamp', 'node_from', 'node_to', 'vehicle_id', 'start_offset_m']].copy()
@@ -167,7 +163,7 @@ def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     # change datetime to int
     df['timestamp']= to_datetime(df['timestamp']).astype(np.int64)//10**6 # resolution in milliseconds
 
-    df['timestamp'] = df['timestamp'].div(1000 * interval).round()
+    df['timestamp'] = df['timestamp'].div(1000 * interval).round().astype(np.int64)
     df = df.groupby(['timestamp', 'vehicle_id']).first().reset_index()
 
     # add column with length
@@ -177,14 +173,18 @@ def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     # drop rows where path hasn't been found in the graph
     df.dropna(subset=['length'], inplace=True)
 
-    df = fill_missing_rows(df, interval)
+    df = fill_missing_rows(df)
+
+    mask = df['node_from'] > df['node_to']
+    df.loc[mask, 'start_offset_m'] = df['length'] - df['start_offset_m']
+    df.loc[mask, ['node_from', 'node_to']] = (df.loc[mask, ['node_to', 'node_from']].values)
+
     return df
 
 
-def preprocess_add_counts(df):
-
+def preprocess_add_counts(df, divide=2):
     df.sort_values(['timestamp', 'vehicle_id'], inplace=True)
-    df = add_counts(df)
+    df = add_counts(df, divide)
 
     df.reset_index(level=['node_from', 'node_to'], inplace=True)
 
