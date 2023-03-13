@@ -57,6 +57,8 @@ def preprocess_mp(df, g, speed, fps, divide):
             df_list.append(result)
 
         df = pd.concat(df_list)
+        print(df.shape)
+        df.sort_values(['timestamp'], inplace=True)
 
         number_of_rows = df.shape[0]
         one_df_rows = round(number_of_rows / num_of_processes)
@@ -69,6 +71,7 @@ def preprocess_mp(df, g, speed, fps, divide):
             df_list.append(result)
 
         df = pd.concat(df_list)
+        print(df.shape)
 
     print(df)
     return df
