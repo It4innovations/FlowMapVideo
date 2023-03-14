@@ -41,17 +41,21 @@ class SegmentInTime(metaclass=Singleton):
     node_from_: InitVar[NodeId]
     node_to_: InitVar[NodeId]
     timestamp: InitVar[int]
-    divide: InitVar[int]
+    divide: InitVar[int] = field(default=2)
 
     def __post_init__(self, node_from_: int, node_to_: int, timestamp, divide):
-        self.node_from = Node(node_from, timestamp)
-        self.node_to = Node(node_to, timestamp)
+        self.node_from = NodeInTime(node_from_, timestamp)
+        self.node_to = NodeInTime(node_to_, timestamp)
         self.inner_counts = [0] * (divide - 2)  # -2 for two nodes
+        self.divide = divide
 
-    def add_vehicle(self, division):
+    def __hash__(self):
+      return hash((self.node_from.id, self.node_to.id, self.timestamp))
+
+    def add_vehicle(self, division: int):
         if division == 0:
             self.node_from.add_vehicle()
-        elif division == divide - 1:
+        elif division == self.divide - 1:
             self.node_to.add_vehicle()
         else:
             self.inner_counts[division - 1] += 1  # -1 for node_from
@@ -89,28 +93,19 @@ class Record:
             assert "length" in data
             self.length = data['length']
 
-    @staticmethod
-    def create_from_existing(timestamp, start_offset_m, base_record):
-        params = asdict(base_record)
-        params['timestamp'] = timestamp
-        params['start_offset_m'] = start_offset_m
 
-        return Record(**params)
-
-
-def add_vehicle(record, divide):
+def add_vehicle(record, divide: int):
     """Add vehicle to **singleton** segment in time element."""
-
     t_seg = SegmentInTime(record.node_from,
                             record.node_to,
                             record.timestamp, divide)
     step = record.length / divide
-    t_seg.add_vehicle(record.start_offset_m // step)
+    t_seg.add_vehicle(int(record.start_offset_m // step))
 
     return t_seg
 
 
-def fill_missing_times(df, graph, speed=1, fps=25, divide=2):
+def fill_missing_times(df, graph, speed=1, fps=25, divide: int=2):
     assert divide >= 2, f"Invalid value of divide '{divide}'. It must be greater or equal to 2."
 
     t_segments = set()
@@ -128,6 +123,7 @@ def fill_missing_times(df, graph, speed=1, fps=25, divide=2):
 
     for i, (processing_record, next_record) in enumerate(zip(records[:], records[1:] + [None])):
         if next_record is None or processing_record.vehicle_id != next_record.vehicle_id:
+
             t_segments.add(add_vehicle(processing_record, divide))
         else:  # fill missing records
             new_timestamps = [*range(processing_record.timestamp, next_record.timestamp)]

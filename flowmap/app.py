@@ -13,7 +13,7 @@ from ruth.simulator import Simulation
 
 from flowmapviz.collection_plot import plot_routes, WidthStyle
 
-from input import preprocess_history_records
+from input import fill_missing_times
 # from input_alt import preprocess_history_records
 from df import get_max_vehicle_count, get_max_time, get_min_time
 from ax_settings import Ax_settings
@@ -54,19 +54,19 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
               help="Adjust width.")
 @click.option('--title','-t', default="", help='Set video title')
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
-
-def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed):
+@click.option('--divide', '-d', default=2, help="Into how many parts will each segment be split.", show_default=True)
+def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
 
     start = datetime.now()
     sim = Simulation.load(simulation_path)
     g = sim.routing_map.network
 
     start = datetime.now()
-    t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps)  # TODO: add divide
+    t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps, divide)
     # TODO: process t_segments
     # sth. like: t_segments = sorted(t_segments, key=lambda tseg: tseg.timestam), or intertools.gropby
     #            [t_seg.counts() for t_seg in t_segments]
-    print("data len: ", len(times_df))
+    print("data len: ", len(t_segments))
     print("time of preprocessing: ", datetime.now() - start)
 
     if save_data:
