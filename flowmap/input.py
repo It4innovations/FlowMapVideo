@@ -94,13 +94,18 @@ class Record:
             self.length = data['length']
 
 
-def add_vehicle(record, divide: int):
+def add_vehicle(record, divide: int, timestamp = None, start_offset_m = None):
     """Add vehicle to **singleton** segment in time element."""
+    if timestamp is None:
+        timestamp = record.timestamp
+    if start_offset_m is None:
+        start_offset_m = record.start_offset_m
+
     t_seg = SegmentInTime(record.node_from,
                             record.node_to,
-                            record.timestamp, divide)
+                            timestamp, divide)
     step = record.length / divide
-    t_seg.add_vehicle(int(record.start_offset_m // step))
+    t_seg.add_vehicle(int(start_offset_m // step))
 
     return t_seg
 
@@ -142,6 +147,6 @@ def fill_missing_times(df, graph, speed=1, fps=25, divide: int=2):
             new_params = zip(new_timestamps, new_offsets)
 
             for record, (timestamp, start_offset_m) in zip(processing_segments, new_params):
-                t_segments.add(add_vehicle(record, divide))
+                t_segments.add(add_vehicle(record, divide, timestamp, start_offset_m))
 
     return t_segments
