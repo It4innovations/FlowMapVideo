@@ -35,8 +35,8 @@ def fill_missing_offsets(row):
     if end == -1:
         return start,
     if is_last_in_segment:
-        return np.linspace(start, end + length, num=len(timestamps))
-    return np.linspace(start, end, num=len(timestamps)+1)[:-1]
+        return np.linspace(start, end + length, num=len(timestamps), endpoint=False)
+    return np.linspace(start, end, num=len(timestamps), endpoint=False)
 
 
 def fill_missing_rows(df):
