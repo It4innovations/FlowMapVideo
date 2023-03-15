@@ -44,6 +44,11 @@ class SegmentInTime(metaclass=Singleton):
     divide: InitVar[int] = field(default=2)
 
     def __post_init__(self, node_from_: int, node_to_: int, timestamp, divide):
+        self.reversed = False
+        if node_from_ > node_to_:
+            self.reversed = True
+            node_from_, node_to_ = node_to_, node_from_
+
         self.node_from = NodeInTime(node_from_, timestamp)
         self.node_to = NodeInTime(node_to_, timestamp)
         self.inner_counts = [0] * (divide - 2)  # -2 for two nodes
@@ -53,6 +58,8 @@ class SegmentInTime(metaclass=Singleton):
       return hash((self.node_from.id, self.node_to.id, self.timestamp))
 
     def add_vehicle(self, division: int):
+        if self.reversed:
+            division = self.divide - 1 - division
         if division == 0:
             self.node_from.add_vehicle()
         elif division == self.divide - 1:
