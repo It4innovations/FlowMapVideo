@@ -94,7 +94,7 @@ def add_counts(df, divide=2):
 
     # find out which part of the segment is the vehicle in
     df['part'] = df['start_offset_m'] // (df['length'] / divide)
-
+    df.loc[df['part'] >= divide, 'part'] = divide - 1
     count_columns = ['counts_' + str(x) for x in range(divide - 2)]
     count_columns[:0] = ['count_from']
     count_columns.append('count_to')
