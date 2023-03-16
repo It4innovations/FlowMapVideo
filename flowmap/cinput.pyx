@@ -10,5 +10,6 @@ def fill_missing_offsets_cython(double start, double end, bint is_last_in_segmen
     if end == -1:
         return start,
     if is_last_in_segment:
-        return np.linspace(start, end + length, num=timestamps_len)
-    return np.linspace(start, end, num=timestamps_len+1)[:-1]
+        return np.linspace(start, end + length, num=timestamps_len, endpoint=False)
+    return np.linspace(start, end, num=timestamps_len, endpoint=False)
+
