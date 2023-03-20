@@ -9,17 +9,17 @@ from os import path
 from matplotlib import animation
 from datetime import datetime
 from time import time
+from collections import defaultdict
 from ruth.simulator import Simulation
 
-from flowmapviz.collection_plot import plot_routes, WidthStyle
+from flowmapviz.plot import plot_routes, WidthStyle
 
 from input import fill_missing_times
-# from input_alt import preprocess_history_records
 from df import get_max_vehicle_count, get_max_time, get_min_time
 from ax_settings import Ax_settings
 
 
-def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
+def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
     def step(i):
         ax.clear()
         ax_settings.apply(ax)
@@ -29,14 +29,19 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
         # TODO: fix time label
 #         if(i % 5*60 == 0):
 #             time_text_artist.set_text(datetime.utcfromtimestamp(timestamp//10**3))
-
-        if timestamp in times.index:
-            segments = times.loc[timestamp]
-            plot_routes(g, segments, ax=ax,
-                        max_width_density=max_count,
-                        width_modifier=width_modif,
-                        width_style=width_style
-                        )
+        segments = t_seg_dict[timestamp]
+        nodes_from = [seg.node_from.id for seg in segments]
+        nodes_to = [seg.node_to.id for seg in segments]
+        densities = [seg.counts for seg in segments]
+        plot_routes(
+            g,
+            ax=ax,
+            nodes_from=nodes_from,
+            nodes_to=nodes_to,
+            densities=densities,
+            max_width_density=max_count,
+            width_modifier=width_modif,
+            width_style=width_style)
     return step
 
 
@@ -63,31 +68,30 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
 
     start = datetime.now()
     t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps, divide)
-    # TODO: process t_segments
-    # sth. like: t_segments = sorted(t_segments, key=lambda tseg: tseg.timestam), or intertools.gropby
-    #            [t_seg.counts() for t_seg in t_segments]
     print("data len: ", len(t_segments))
     print("time of preprocessing: ", datetime.now() - start)
 
     if save_data:
         times_df.to_csv('data.csv')
 
-    return
 
-    # ---------------------------------------------------------------------------
+    timestamps = [seg.timestamp for seg in t_segments]
+    min_timestamp = min(timestamps)
+    max_timestamp = max(timestamps)
 
-    max_count = times_df['count_from'].max()
-    max_to = times_df['count_to'].max()
-    if max_to > max_count:
-        max_count = max_to
+    max_count = max([max(seg.counts) for seg in t_segments]) #times_df['count_from'].max()
+
+    timestamp_from = min_timestamp + frame_start
+    times_len = max_timestamp - timestamp_from
+    times_len = min(int(frames_len), times_len) if frames_len else times_len
+
+    t_seg_dict = defaultdict(list)
+    for seg in t_segments:
+        t_seg_dict[seg.timestamp].append(seg)
 
     f, ax_map = plt.subplots()
     fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
     fig.set_size_inches(30, 24)
-
-    timestamp_from = get_min_time(times_df) + frame_start
-    times_len = get_max_time(times_df) - timestamp_from
-    times_len = min(int(frames_len), times_len) if frames_len else times_len
 
     plt.title(title, fontsize=40)
     time_text = plt.figtext(0.5, 0.09, datetime.utcfromtimestamp(timestamp_from//10**3), ha="center", fontsize=25)
@@ -105,7 +109,7 @@ def main(simulation_path, fps, save_path, frame_start, frames_len, processed_dat
     anim = animation.FuncAnimation(plt.gcf(),
                                     animate(
                                         g,
-                                        times_df,
+                                        t_seg_dict,
                                         ax_settings=ax_map_settings,
                                         ax=ax_density,
                                         timestamp_from=timestamp_from,
