@@ -1,15 +1,12 @@
+import gc
+import numpy as np
+
 from collections import defaultdict
 from dataclasses import dataclass, InitVar, asdict, field
 from datetime import datetime, timedelta
-import operator
-from itertools import zip_longest
+from itertools import zip_longest, groupby
 from pandas import date_range, DateOffset, to_datetime
-import numpy as np
 from math import ceil
-from operator import attrgetter
-from itertools import groupby
-import gc
-import numpy as np
 from networkx import MultiDiGraph as Graph
 from typing import NewType
 

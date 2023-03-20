@@ -14,9 +14,8 @@ from ruth.simulator import Simulation
 
 from flowmapviz.plot import plot_routes, WidthStyle
 
-from input import fill_missing_times
-from df import get_max_vehicle_count, get_max_time, get_min_time
-from ax_settings import Ax_settings
+from .input import fill_missing_times
+from .ax_settings import Ax_settings
 
 
 def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
