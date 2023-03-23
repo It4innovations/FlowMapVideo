@@ -4,6 +4,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+from enum import Enum
+from datetime import timedelta
 from math import floor
 from os import path
 from matplotlib import animation
@@ -11,11 +13,16 @@ from datetime import datetime
 from time import time
 from collections import defaultdict
 from ruth.simulator import Simulation
+from ruth.utils import TimerSet
 
 from flowmapviz.plot import plot_routes, WidthStyle
 
 from .input import fill_missing_times
 from .ax_settings import Ax_settings
+
+@click.group()
+def cli():
+    pass
 
 
 def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
@@ -44,7 +51,7 @@ def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_mod
     return step
 
 
-@click.command()
+@cli.command()
 @click.argument('simulation_path')
 @click.option('--fps', '-f', default=25, help="Set video frames per second.", show_default=True)
 @click.option('--save-path', default="", help='Path to the folder for the output video.')
@@ -59,76 +66,116 @@ def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_mod
 @click.option('--title','-t', default="", help='Set video title')
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
 @click.option('--divide', '-d', default=2, help="Into how many parts will each segment be split.", show_default=True)
-def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
+def generate_animation(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
+
+    ts = TimerSet()
 
     start = datetime.now()
-    sim = Simulation.load(simulation_path)
-    g = sim.routing_map.network
 
-    start = datetime.now()
-    t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps, divide)
-    print("data len: ", len(t_segments))
-    print("time of preprocessing: ", datetime.now() - start)
+    with ts.get("preprocessing"):
+        sim = Simulation.load(simulation_path)
+        g = sim.routing_map.network
 
-    if save_data:
-        times_df.to_csv('data.csv')
+        t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps, divide)
+        print("data len: ", len(t_segments))
+
+        if save_data:
+            times_df.to_csv('data.csv')
 
 
-    timestamps = [seg.timestamp for seg in t_segments]
-    min_timestamp = min(timestamps)
-    max_timestamp = max(timestamps)
+        timestamps = [seg.timestamp for seg in t_segments]
+        min_timestamp = min(timestamps)
+        max_timestamp = max(timestamps)
 
-    max_count = max([max(seg.counts) for seg in t_segments]) #times_df['count_from'].max()
+        max_count = max([max(seg.counts) for seg in t_segments]) #times_df['count_from'].max()
 
-    timestamp_from = min_timestamp + frame_start
-    times_len = max_timestamp - timestamp_from
-    times_len = min(int(frames_len), times_len) if frames_len else times_len
+        timestamp_from = min_timestamp + frame_start
+        times_len = max_timestamp - timestamp_from
+        times_len = min(int(frames_len), times_len) if frames_len else times_len
 
-    t_seg_dict = defaultdict(list)
-    for seg in t_segments:
-        t_seg_dict[seg.timestamp].append(seg)
+        t_seg_dict = defaultdict(list)
+        for seg in t_segments:
+            t_seg_dict[seg.timestamp].append(seg)
 
-    f, ax_map = plt.subplots()
-    fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
-    fig.set_size_inches(30, 24)
+        f, ax_map = plt.subplots()
+        fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
+        fig.set_size_inches(30, 24)
 
-    plt.title(title, fontsize=40)
-    time_text = plt.figtext(0.5, 0.09, datetime.utcfromtimestamp(timestamp_from//10**3), ha="center", fontsize=25)
+        plt.title(title, fontsize=40)
+        time_text = plt.figtext(0.5, 0.09, datetime.utcfromtimestamp(timestamp_from//10**3), ha="center", fontsize=25)
 
-    ax_density = ax_map.twinx()
-    ax_map_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
+        ax_density = ax_map.twinx()
+        ax_map_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
 
-    # TODO: fix style
-    width_style_enum_option = WidthStyle.CALLIGRAPHY
-    for el in WidthStyle:
-        if el.name == width_style:
-            width_style_enum_option = el
+        # TODO: fix style
+        width_style_enum_option = WidthStyle.CALLIGRAPHY
+        for el in WidthStyle:
+            if el.name == width_style:
+                width_style_enum_option = el
 
-    print(floor(times_len/speed))
-    anim = animation.FuncAnimation(plt.gcf(),
-                                    animate(
-                                        g,
-                                        t_seg_dict,
-                                        ax_settings=ax_map_settings,
-                                        ax=ax_density,
-                                        timestamp_from=timestamp_from,
-                                        max_count = max_count,
-                                        width_modif = width_modif,
-                                        width_style = width_style_enum_option,
-                                        time_text_artist = time_text,
-                                        speed = speed
-                                        ),
-                                    interval=75, frames=floor(times_len), repeat=False)
+        print(floor(times_len))
+
+    with ts.get("mpl_anim"):
+        anim = animation.FuncAnimation(plt.gcf(),
+                                        animate(
+                                            g,
+                                            t_seg_dict,
+                                            ax_settings=ax_map_settings,
+                                            ax=ax_density,
+                                            timestamp_from=timestamp_from,
+                                            max_count = max_count,
+                                            width_modif = width_modif,
+                                            width_style = width_style_enum_option,
+                                            time_text_artist = time_text,
+                                            speed = speed
+                                            ),
+                                        interval=75, frames=floor(times_len), repeat=False)
     timestamp = round(time() * 1000)
 
-    anim_start = datetime.now()
-    anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg", fps=fps)
-    print('doba trvani ulozeni animace: ', datetime.now() - anim_start)
+    with ts.get("saving_video"):
+        anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg", fps=fps)
 
-    finish = datetime.now()
-    print('doba trvani: ', finish - start)
+    print('celkova doba trvani: ', datetime.now() - start)
+
+    for k,v in ts.collect().items():
+        print(f"{k}: {v} ms")
+
+
+class TimeUnit(Enum):
+    SECONDS = timedelta(seconds=1)
+    MINUTES = timedelta(minutes=1)
+    HOURS = timedelta(hours=1)
+
+    @staticmethod
+    def from_str(name):
+        if name == "seconds":
+            return TimeUnit.SECONDS
+        elif name == "minutes":
+            return TimeUnit.MINUTES
+        elif name == "hours":
+            return TimeUnit.HOURS
+
+        raise Exception(f"Invalid time unit: '{name}'.")
+
+
+@cli.command()
+@click.argument("simulation-path", type=click.Path(exists=True))
+@click.option("--time-unit", type=str,
+              help="Time unit. Possible values: [seconds|minutes|hours]",
+              default="hours")
+def get_info(simulation_path, time_unit):
+
+    sim = Simulation.load(simulation_path)
+
+    time_unit = TimeUnit.from_str(time_unit)
+
+    real_time = (sim.history.data[-1][0] - sim.history.data[0][0]) / time_unit.value
+
+    print (f"Real time duration: {real_time} {time_unit.name.lower()}.")
+
+def main():
+    cli()
 
 
 if __name__ == '__main__':
     main()
-
