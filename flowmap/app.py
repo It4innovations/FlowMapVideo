@@ -6,6 +6,8 @@ import numpy as np
 
 from enum import Enum
 from datetime import timedelta
+from multiprocessing import Pool, cpu_count, Manager
+from functools import partial
 from math import floor
 from os import path
 from matplotlib import animation
@@ -13,7 +15,7 @@ from datetime import datetime
 from time import time
 from collections import defaultdict
 from ruth.simulator import Simulation
-from ruth.utils import TimerSet
+from ruth.utils import TimerSet, Timer
 
 from flowmapviz.plot import plot_routes, WidthStyle
 
@@ -22,6 +24,45 @@ from .ax_settings import Ax_settings
 
 @click.group()
 def cli():
+    pass
+
+
+def compute_frame(segments, g, ax, max_with_density, with_modifier, with_style):
+    pass
+
+
+manager = Manager()
+glob_data = manager.dict(defaultdict(list))
+
+def prepare_step(step, t_seg_dict, timestamp_from):
+    glob_data.append(t_seg_dict)
+
+    timestamp = timestamp_from + step # * speed # * round(1000 / fps)
+    # TODO: fix time label
+#         if(i % 5*60 == 0):
+#             time_text_artist.set_text(datetime.utcfromtimestamp(timestamp//10**3))
+
+    segments = t_seg_dict[timestamp]
+    nodes_from = [seg.node_from.id for seg in segments]
+    nodes_to = [seg.node_to.id for seg in segments]
+    densities = [seg.counts for seg in segments]
+
+    return nodes_from, nodes_to, densities
+
+
+def prepare_steps(t_seg_dict, timestamp_from, n_steps):
+
+    single_step_data = partial(prepare_step,
+                               t_seg_dict=t_seg_dict,
+                               timestamp_from=timestamp_from)
+
+    # killed by parallel map
+    with Pool(processes=cpu_count()) as p:  # TODO: pass pool as a parameter
+        return p.map(single_step_data, range(n_steps))
+    # return map(single_step_data, range(n_steps))
+
+
+def comptue_frames(t_seg_dict, g, ax, max_with_density, with_modifier, with_style):
     pass
 
 
@@ -173,8 +214,49 @@ def get_info(simulation_path, time_unit):
 
     print (f"Real time duration: {real_time} {time_unit.name.lower()}.")
 
+
+@cli.command()
+@click.argument("simulation-path", type=click.Path(exists=True))
+def test(simulation_path):
+
+    speed = 60
+    fps = 25
+    divide = 2
+    frame_start = 0
+
+    sim = Simulation.load(simulation_path)
+    g = sim.routing_map.network
+
+    t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps, divide)
+
+    timestamps = [seg.timestamp for seg in t_segments]
+    min_timestamp = min(timestamps)
+    max_timestamp = max(timestamps)
+
+    max_count = max([max(seg.counts) for seg in t_segments]) #times_df['count_from'].max()
+
+    timestamp_from = min_timestamp + frame_start
+    times_len = max_timestamp - timestamp_from
+    # times_len = min(int(frames_len), times_len) if frames_len else times_len
+
+    # t_seg_dict = defaultdict(list)
+    # for seg in t_segments:
+    #     t_seg_dict[seg.timestamp].append(seg)
+    for seg in t_segments:
+        glob_data[seg.timestamp].append(seg)
+
+    with Timer("prepare_steps") as t:
+        single_steps_data = prepare_steps(glob_data, timestamp_from, times_len)
+        # for ss in single_steps_data:
+        #     print (ss)
+
+
+    print(f"{t.duration_ms} ms")
+
+
 def main():
     cli()
+
 
 
 if __name__ == '__main__':
