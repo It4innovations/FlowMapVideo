@@ -70,6 +70,7 @@ class Record:
     timestamp: int
     vehicle_id: int
     segment_id: str
+    segment_length: float
     start_offset_m: float
     speed_mps: float
     status: str
