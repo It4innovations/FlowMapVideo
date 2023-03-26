@@ -2,7 +2,9 @@ import click
 import osmnx as ox
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
+import pickle
 
 from enum import Enum
 from datetime import timedelta
@@ -16,6 +18,8 @@ from time import time
 from collections import defaultdict
 from ruth.simulator import Simulation
 from ruth.utils import TimerSet, Timer
+from itertools import chain
+import pathlib
 
 from flowmapviz.plot import plot_routes, WidthStyle
 
@@ -27,69 +31,44 @@ def cli():
     pass
 
 
-def compute_frame(segments, g, ax, max_with_density, with_modifier, with_style):
-    pass
+def generate_frame(t_seg_dict, timestamp_from, times_len, g, max_count, width_modif, width_style, title):
+    f, ax_map = plt.subplots()
+    fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
+    fig.set_size_inches(30, 24)
+    plt.title(title, fontsize=40)
+    time_text = plt.figtext(0.5, 0.09, datetime.utcfromtimestamp(timestamp_from//10**3), ha="center", fontsize=25)
 
+    ax_density = ax_map.twinx()
+    ax_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
 
-manager = Manager()
-glob_data = manager.dict(defaultdict(list))
+    frames = []
+    for timest in range(timestamp_from, timestamp_from + times_len):
+        ax_density.clear()
+        ax_settings.apply(ax_density)
+        ax_density.axis('off')
 
-def prepare_step(step, t_seg_dict, timestamp_from):
-    glob_data.append(t_seg_dict)
-
-    timestamp = timestamp_from + step # * speed # * round(1000 / fps)
-    # TODO: fix time label
-#         if(i % 5*60 == 0):
-#             time_text_artist.set_text(datetime.utcfromtimestamp(timestamp//10**3))
-
-    segments = t_seg_dict[timestamp]
-    nodes_from = [seg.node_from.id for seg in segments]
-    nodes_to = [seg.node_to.id for seg in segments]
-    densities = [seg.counts for seg in segments]
-
-    return nodes_from, nodes_to, densities
-
-
-def prepare_steps(t_seg_dict, timestamp_from, n_steps):
-
-    single_step_data = partial(prepare_step,
-                               t_seg_dict=t_seg_dict,
-                               timestamp_from=timestamp_from)
-
-    # killed by parallel map
-    with Pool(processes=cpu_count()) as p:  # TODO: pass pool as a parameter
-        return p.map(single_step_data, range(n_steps))
-    # return map(single_step_data, range(n_steps))
-
-
-def comptue_frames(t_seg_dict, g, ax, max_with_density, with_modifier, with_style):
-    pass
-
-
-def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
-    def step(i):
-        ax.clear()
-        ax_settings.apply(ax)
-        ax.axis('off')
-
-        timestamp = timestamp_from + i # * speed # * round(1000 / fps)
-        # TODO: fix time label
-#         if(i % 5*60 == 0):
-#             time_text_artist.set_text(datetime.utcfromtimestamp(timestamp//10**3))
-        segments = t_seg_dict[timestamp]
+        segments = t_seg_dict[timest]
         nodes_from = [seg.node_from.id for seg in segments]
         nodes_to = [seg.node_to.id for seg in segments]
         densities = [seg.counts for seg in segments]
         plot_routes(
             g,
-            ax=ax,
+            ax=ax_density,
             nodes_from=nodes_from,
             nodes_to=nodes_to,
             densities=densities,
             max_width_density=max_count,
             width_modifier=width_modif,
             width_style=width_style)
-    return step
+
+        canvas = fig.canvas
+        canvas.draw()
+
+        frame = np.frombuffer(canvas.tostring_rgb(), dtype='uint8')
+        frame = frame.reshape(canvas.get_width_height()[::-1] + (3,))
+        frames.append(frame)
+    plt.close(fig)
+    return frames
 
 
 @cli.command()
@@ -100,7 +79,7 @@ def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_mod
 @click.option('--frames-len', help="Number of frames to plot")
 @click.option('--processed-data','-p', is_flag=True, help="Data is already processed")
 @click.option('--save-data','-s', is_flag=True, help="Save processed data")
-@click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='CALLIGRAPHY',
+@click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='BOXED',
               help="Choose style of width plotting")
 @click.option('--width-modif', default=10, type=click.IntRange(2, 200, clamp=True), show_default=True,
               help="Adjust width.")
@@ -108,75 +87,75 @@ def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_mod
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
 @click.option('--divide', '-d', default=2, help="Into how many parts will each segment be split.", show_default=True)
 def generate_animation(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
-
     ts = TimerSet()
-
-    start = datetime.now()
-
-    with ts.get("preprocessing"):
+    with ts.get("data loading"):
         sim = Simulation.load(simulation_path)
         g = sim.routing_map.network
+        sim_history = sim.history.to_dataframe()
 
-        t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps, divide)
-        print("data len: ", len(t_segments))
+    with ts.get("data preprocessing"):
+        t_segments = fill_missing_times(sim_history, g, speed, fps, divide)
 
+        # TODO: fix saving data
         if save_data:
             times_df.to_csv('data.csv')
 
-
+    with ts.get("preparing for animation"):
         timestamps = [seg.timestamp for seg in t_segments]
         min_timestamp = min(timestamps)
         max_timestamp = max(timestamps)
 
-        max_count = max([max(seg.counts) for seg in t_segments]) #times_df['count_from'].max()
+        max_count = max([max(seg.counts) for seg in t_segments])
 
         timestamp_from = min_timestamp + frame_start
         times_len = max_timestamp - timestamp_from
         times_len = min(int(frames_len), times_len) if frames_len else times_len
 
-        t_seg_dict = defaultdict(list)
-        for seg in t_segments:
-            t_seg_dict[seg.timestamp].append(seg)
+        width_style = WidthStyle[width_style]
 
-        f, ax_map = plt.subplots()
-        fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
-        fig.set_size_inches(30, 24)
+    with ts.get("generate frames"):
+        compute_frame_partial = partial(generate_frame,
+                             g=g,
+                             max_count=max_count,
+                             width_modif=width_modif,
+                             width_style=width_style,
+                             title=title)
 
-        plt.title(title, fontsize=40)
-        time_text = plt.figtext(0.5, 0.09, datetime.utcfromtimestamp(timestamp_from//10**3), ha="center", fontsize=25)
+#         manager = Manager()
+#         glob_dict = manager.dict()
+#
+#         for seg in t_segments:
+#             if seg.timestamp not in glob_dict.keys():
+#                 glob_dict[seg.timestamp] = [seg]
+#             else:
+#                 l = glob_dict[seg.timestamp]
+#                 l.append(seg)
+#                 glob_dict[seg.timestamp] = l
 
-        ax_density = ax_map.twinx()
-        ax_map_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
+        dicts = [defaultdict(list)] * cpu_count()
+        part_range = int(times_len // (cpu_count() + 1)) + 1
+        t_segments = sorted(t_segments, key=lambda x: x.timestamp)
+        j = 0
+        timestamps_from = [timestamp_from]
+        times_lens = []
+        for _, seg in enumerate(t_segments):
+            if seg.timestamp > timestamp_from + (j + 1) * part_range and j < cpu_count() - 1:
+                times_lens.append(seg.timestamp - timestamps_from[j])
+                j += 1
+                timestamps_from.append(seg.timestamp)
+            dicts[j][seg.timestamp].append(seg)
+        times_lens.append(t_segments[-1].timestamp - timestamps_from[cpu_count() - 1] + 1)
 
-        # TODO: fix style
-        width_style_enum_option = WidthStyle.CALLIGRAPHY
-        for el in WidthStyle:
-            if el.name == width_style:
-                width_style_enum_option = el
+        with Pool() as pool:
+            frames = pool.starmap(compute_frame_partial, list(zip(dicts, timestamps_from, times_lens)))
+        frames = list(chain.from_iterable(frames))
 
-        print(floor(times_len))
+    with ts.get("create animation"):
+        plt.axis('off')
+        anim = animation.FuncAnimation(plt.gcf(), lambda i: plt.imshow(frames[i]), interval=75, frames=floor(times_len), repeat=False)
 
-    with ts.get("mpl_anim"):
-        anim = animation.FuncAnimation(plt.gcf(),
-                                        animate(
-                                            g,
-                                            t_seg_dict,
-                                            ax_settings=ax_map_settings,
-                                            ax=ax_density,
-                                            timestamp_from=timestamp_from,
-                                            max_count = max_count,
-                                            width_modif = width_modif,
-                                            width_style = width_style_enum_option,
-                                            time_text_artist = time_text,
-                                            speed = speed
-                                            ),
-                                        interval=75, frames=floor(times_len), repeat=False)
-    timestamp = round(time() * 1000)
-
-    with ts.get("saving_video"):
+        timestamp = round(time() * 1000)
         anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg", fps=fps)
-
-    print('celkova doba trvani: ', datetime.now() - start)
 
     for k,v in ts.collect().items():
         print(f"{k}: {v} ms")
@@ -215,48 +194,8 @@ def get_info(simulation_path, time_unit):
     print (f"Real time duration: {real_time} {time_unit.name.lower()}.")
 
 
-@cli.command()
-@click.argument("simulation-path", type=click.Path(exists=True))
-def test(simulation_path):
-
-    speed = 60
-    fps = 25
-    divide = 2
-    frame_start = 0
-
-    sim = Simulation.load(simulation_path)
-    g = sim.routing_map.network
-
-    t_segments = fill_missing_times(sim.history.to_dataframe(), g, speed, fps, divide)
-
-    timestamps = [seg.timestamp for seg in t_segments]
-    min_timestamp = min(timestamps)
-    max_timestamp = max(timestamps)
-
-    max_count = max([max(seg.counts) for seg in t_segments]) #times_df['count_from'].max()
-
-    timestamp_from = min_timestamp + frame_start
-    times_len = max_timestamp - timestamp_from
-    # times_len = min(int(frames_len), times_len) if frames_len else times_len
-
-    # t_seg_dict = defaultdict(list)
-    # for seg in t_segments:
-    #     t_seg_dict[seg.timestamp].append(seg)
-    for seg in t_segments:
-        glob_data[seg.timestamp].append(seg)
-
-    with Timer("prepare_steps") as t:
-        single_steps_data = prepare_steps(glob_data, timestamp_from, times_len)
-        # for ss in single_steps_data:
-        #     print (ss)
-
-
-    print(f"{t.duration_ms} ms")
-
-
 def main():
     cli()
-
 
 
 if __name__ == '__main__':
