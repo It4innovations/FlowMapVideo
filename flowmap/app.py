@@ -31,44 +31,53 @@ def cli():
     pass
 
 
-def generate_frame(t_seg_dict, timestamp_from, times_len, g, max_count, width_modif, width_style, title):
-    f, ax_map = plt.subplots()
-    fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
-    fig.set_size_inches(30, 24)
-    plt.title(title, fontsize=40)
-    time_text = plt.figtext(0.5, 0.09, datetime.utcfromtimestamp(timestamp_from//10**3), ha="center", fontsize=25)
-
-    ax_density = ax_map.twinx()
-    ax_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
-
-    frames = []
-    for timest in range(timestamp_from, timestamp_from + times_len):
-        ax_density.clear()
-        ax_settings.apply(ax_density)
-        ax_density.axis('off')
-
+def generate_frame(t_seg_dict, timestamp_from, times_len, g, max_count, width_modif, width_style):
+    ims = []
+    for i in range(times_len):
+        timest = timestamp_from + i
         segments = t_seg_dict[timest]
         nodes_from = [seg.node_from.id for seg in segments]
         nodes_to = [seg.node_to.id for seg in segments]
         densities = [seg.counts for seg in segments]
-        plot_routes(
+        routes = plot_routes(
             g,
-            ax=ax_density,
+            ax=ax,
             nodes_from=nodes_from,
             nodes_to=nodes_to,
             densities=densities,
             max_width_density=max_count,
             width_modifier=width_modif,
-            width_style=width_style)
+            width_style=WidthStyle.BOXED,
+            plot=False)
+        im = []
+        for r in routes:
+            if r != [] and r is not None:
+                im.append(r)
+                print(r)
+                r.set_animated(True)
+        ims.append(im)
+    return ims
 
-        canvas = fig.canvas
-        canvas.draw()
 
-        frame = np.frombuffer(canvas.tostring_rgb(), dtype='uint8')
-        frame = frame.reshape(canvas.get_width_height()[::-1] + (3,))
-        frames.append(frame)
-    plt.close(fig)
-    return frames
+def get_node_coordinates(g, node_from, node_to):
+    x = []
+    y = []
+    edge = g.get_edge_data(node_from, node_to)
+    if edge is None:
+        edge = g.get_edge_data(node_to, node_from)
+        if edge is None:
+            return x, y
+
+    data = min(edge.values(), key=lambda d: d["length"])
+    if "geometry" in data:
+        xs, ys = data["geometry"].xy
+        x.extend(xs)
+        y.extend(ys)
+    else:
+        x.extend((g.nodes[node_from]["x"], g.nodes[node_to]["x"]))
+        y.extend((g.nodes[node_from]["y"], g.nodes[node_to]["y"]))
+
+    return x, y
 
 
 @cli.command()
@@ -79,7 +88,7 @@ def generate_frame(t_seg_dict, timestamp_from, times_len, g, max_count, width_mo
 @click.option('--frames-len', help="Number of frames to plot")
 @click.option('--processed-data','-p', is_flag=True, help="Data is already processed")
 @click.option('--save-data','-s', is_flag=True, help="Save processed data")
-@click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='BOXED',
+@click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='EQUIDISTANT',
               help="Choose style of width plotting")
 @click.option('--width-modif', default=10, type=click.IntRange(2, 200, clamp=True), show_default=True,
               help="Adjust width.")
@@ -87,6 +96,7 @@ def generate_frame(t_seg_dict, timestamp_from, times_len, g, max_count, width_mo
 @click.option('--speed', default=1, help="Speed up the video.", show_default=True)
 @click.option('--divide', '-d', default=2, help="Into how many parts will each segment be split.", show_default=True)
 def generate_animation(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
+    mpl.use('Agg')
     ts = TimerSet()
     with ts.get("data loading"):
         sim = Simulation.load(simulation_path)
@@ -113,24 +123,17 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
 
         width_style = WidthStyle[width_style]
 
+#         for edge in g.edges():
+#             x, y = get_node_coordinates(g, edge[0], edge[1])
+#             lines = ax.plot(x, y, c='#7d7d7d', animated=False)
+#         graph.extend(lines)
+
     with ts.get("generate frames"):
         compute_frame_partial = partial(generate_frame,
                              g=g,
                              max_count=max_count,
                              width_modif=width_modif,
-                             width_style=width_style,
-                             title=title)
-
-#         manager = Manager()
-#         glob_dict = manager.dict()
-#
-#         for seg in t_segments:
-#             if seg.timestamp not in glob_dict.keys():
-#                 glob_dict[seg.timestamp] = [seg]
-#             else:
-#                 l = glob_dict[seg.timestamp]
-#                 l.append(seg)
-#                 glob_dict[seg.timestamp] = l
+                             width_style=width_style)
 
         dicts = [defaultdict(list)] * cpu_count()
         part_range = int(times_len // (cpu_count() + 1)) + 1
@@ -150,9 +153,13 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
             frames = pool.starmap(compute_frame_partial, list(zip(dicts, timestamps_from, times_lens)))
         frames = list(chain.from_iterable(frames))
 
+        for frame in frames:
+            for coll in frame:
+                ax.add_collection(coll)
+
     with ts.get("create animation"):
         plt.axis('off')
-        anim = animation.FuncAnimation(plt.gcf(), lambda i: plt.imshow(frames[i]), interval=75, frames=floor(times_len), repeat=False)
+        anim = animation.ArtistAnimation(fig, frames, interval=75, repeat=False)
 
         timestamp = round(time() * 1000)
         anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg", fps=fps)
