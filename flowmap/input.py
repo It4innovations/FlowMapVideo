@@ -98,13 +98,8 @@ def add_vehicle(record, divide: int, timestamp = None, start_offset_m = None):
     if start_offset_m is None:
         start_offset_m = record.start_offset_m
 
-    node_from, node_to = record.node_from, record.node_to
-    if node_from > node_to:
-        node_from, node_to = node_to, node_from
-        start_offset_m = record.length - start_offset_m
-
-    t_seg = SegmentInTime(node_from,
-                            node_to,
+    t_seg = SegmentInTime(record.node_from,
+                            record.node_to,
                             timestamp, divide)
     step = record.length / divide
     t_seg.add_vehicle(int(start_offset_m // step))
