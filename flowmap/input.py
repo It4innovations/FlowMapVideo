@@ -30,7 +30,7 @@ class NodeInTime(metaclass=Singleton):
 
 @dataclass
 class SegmentInTime(metaclass=Singleton):
-
+    length: InitVar[float]
     node_from: NodeInTime = field(init=False)
     node_to: NodeInTime = field(init=False)
 
@@ -39,16 +39,22 @@ class SegmentInTime(metaclass=Singleton):
     timestamp: InitVar[int]
     divide: InitVar[int] = field(default=2)
 
-    def __post_init__(self, node_from_: int, node_to_: int, timestamp, divide):
+    def __post_init__(self, node_from_: int, node_to_: int, length: float, timestamp, divide):
         self.node_from = NodeInTime(node_from_, timestamp)
         self.node_to = NodeInTime(node_to_, timestamp)
+        self.length = length
         self.inner_counts = [0] * (divide - 2)  # -2 for two nodes
+        self.offsets = []
         self.divide = divide
 
     def __hash__(self):
       return hash((self.node_from.id, self.node_to.id, self.timestamp))
 
-    def add_vehicle(self, division: int):
+    def add_vehicle(self, start_offset_m):
+        self.offsets.append(start_offset_m)
+        step = self.length / self.divide
+        division = int(start_offset_m // step)
+
         if division == 0:
             self.node_from.add_vehicle()
         elif division >= self.divide - 1:
@@ -100,9 +106,10 @@ def add_vehicle(record, divide: int, timestamp = None, start_offset_m = None):
 
     t_seg = SegmentInTime(record.node_from,
                             record.node_to,
-                            timestamp, divide)
-    step = record.length / divide
-    t_seg.add_vehicle(int(start_offset_m // step))
+                            record.length,
+                            timestamp,
+                            divide)
+    t_seg.add_vehicle(start_offset_m)
 
     return t_seg
 
