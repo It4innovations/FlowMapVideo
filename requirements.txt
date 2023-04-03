@@ -1,4 +1,4 @@
-flowmapviz @ git+https://project_1326_bot:glpat-t4wir2xP9HvEyxmp1tCb@code.it4i.cz/intern/trafficflowmap/flowmapviz.git
+flowmapviz @ git+https://github.com/It4innovations/FlowMapFrame.git
 ruth @ git+https://github.com/It4innovations/ruth
 
 click
