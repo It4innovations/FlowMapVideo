@@ -4,4 +4,4 @@ ruth @ git+https://github.com/It4innovations/ruth
 click
 osmnx
 fastparquet
-ffmpeg
+imageio[ffmpeg]
