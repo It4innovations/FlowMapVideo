@@ -36,9 +36,14 @@ def cli():
 def generate_frame(t_seg_dict, timestamp_from, times_len, i, g, max_count, width_modif, width_style, title):
     f, ax_map = plt.subplots()
     fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
-    fig.set_size_inches(20, 12)
     plt.title(title, fontsize=40)
     time_text = plt.figtext(0.5, 0.09, datetime.utcfromtimestamp(timestamp_from//10**3), ha="center", fontsize=25)
+
+    size = fig.get_size_inches()
+    new_size = 20
+    size[1] = size[1] * new_size / size[0]
+    size[0] = new_size
+    fig.set_size_inches(size)
 
     ax_density = ax_map.twinx()
     ax_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
