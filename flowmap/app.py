@@ -6,6 +6,7 @@ import matplotlib as mpl
 import numpy as np
 import pickle
 import imageio
+import io
 
 from enum import Enum
 from datetime import timedelta
@@ -20,6 +21,7 @@ from collections import defaultdict
 from ruth.simulator import Simulation
 from ruth.utils import TimerSet, Timer
 from itertools import chain
+from PIL import Image
 
 from flowmapviz.plot import plot_routes, WidthStyle
 
@@ -31,19 +33,7 @@ def cli():
     pass
 
 
-def clear_folder(folder_name):
-    for filename in listdir(folder_name):
-        file_path = path.join(folder_name, filename)
-        try:
-            if path.isfile(file_path) or path.islink(file_path):
-                unlink(file_path)
-            elif path.isdir(file_path):
-                shutil.rmtree(file_path)
-        except Exception as e:
-            print('Failed to delete %s. Reason: %s' % (file_path, e))
-
-
-def generate_frame(t_seg_dict, timestamp_from, times_len, i, g, max_count, width_modif, width_style, title, folder):
+def generate_frame(t_seg_dict, timestamp_from, times_len, i, g, max_count, width_modif, width_style, title):
     f, ax_map = plt.subplots()
     fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
     fig.set_size_inches(20, 12)
@@ -73,8 +63,14 @@ def generate_frame(t_seg_dict, timestamp_from, times_len, i, g, max_count, width
             max_width_density=max_count,
             width_modifier=width_modif,
             width_style=width_style)
-        plt.savefig(path.join(folder, str(i) + str(time_offset).zfill(10) + ".jpg"), dpi=320, format='jpg', transparent=False, bbox_inches='tight', pad_inches=0)
+
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format='png')
+        buffer.seek(0)
+        image = np.array(Image.open(buffer))
+        frames.append(image)
     plt.close(fig)
+    return frames
 
 
 @cli.command()
@@ -119,28 +115,13 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
 
         width_style = WidthStyle[width_style]
 
-        folder = 'anim_images'
-        pathlib.Path(folder).mkdir(parents=True, exist_ok=True)
-        clear_folder(folder)
     with ts.get("generate frames"):
         compute_frame_partial = partial(generate_frame,
                              g=g,
                              max_count=max_count,
                              width_modif=width_modif,
                              width_style=width_style,
-                             title=title,
-                             folder=folder)
-
-#         manager = Manager()
-#         glob_dict = manager.dict()
-#
-#         for seg in t_segments:
-#             if seg.timestamp not in glob_dict.keys():
-#                 glob_dict[seg.timestamp] = [seg]
-#             else:
-#                 l = glob_dict[seg.timestamp]
-#                 l.append(seg)
-#                 glob_dict[seg.timestamp] = l
+                             title=title)
 
         dicts = [defaultdict(list)] * cpu_count()
         part_range = int(times_len // (cpu_count() + 1)) + 1
@@ -157,17 +138,15 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
         times_lens.append(t_segments[-1].timestamp - timestamps_from[cpu_count() - 1] + 1)
 
         with Pool() as pool:
-            pool.starmap(compute_frame_partial, list(zip(dicts, timestamps_from, times_lens, list(range(cpu_count())))))
+            images = pool.starmap(compute_frame_partial, list(zip(dicts, timestamps_from, times_lens, list(range(cpu_count())))))
+        images = list(chain.from_iterable(images))
 
     with ts.get("create animation"):
         timestamp = round(time() * 1000)
         writer = imageio.get_writer(path.join(save_path, str(timestamp) + "-rt.mp4"), fps=fps)
-        images = [img for img in listdir(folder) if img.endswith(".jpg")]
         for img in images:
-            writer.append_data(imageio.imread(path.join(folder, img)))
+            writer.append_data(img)
         writer.close()
-        clear_folder(folder)
-        rmdir(folder)
 
     for k,v in ts.collect().items():
         print(f"{k}: {v} ms")
