@@ -22,18 +22,29 @@ from ruth.simulator import Simulation
 from ruth.utils import TimerSet, Timer
 from itertools import chain
 from PIL import Image
+from dataclasses import dataclass
+from typing import Dict
 
 from flowmapviz.plot import plot_routes, WidthStyle
 
 from .input import fill_missing_times
 from .ax_settings import Ax_settings
 
+
+@dataclass
+class MPParam():
+    d: Dict[int, list]
+    timestamp_from: int
+    times_len: int
+
+
 @click.group()
 def cli():
     pass
 
 
-def generate_frame(t_seg_dict, timestamp_from, times_len, i, g, max_count, width_modif, width_style, title):
+def generate_frame(params, g, max_count, width_modif, width_style, title):
+    t_seg_dict, timestamp_from, times_len = params.d, params.timestamp_from, params.times_len
     f, ax_map = plt.subplots()
     fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
     plt.title(title, fontsize=40)
@@ -121,6 +132,7 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
         width_style = WidthStyle[width_style]
 
     with ts.get("generate frames"):
+        num_of_processes = cpu_count()
         compute_frame_partial = partial(generate_frame,
                              g=g,
                              max_count=max_count,
@@ -128,30 +140,32 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
                              width_style=width_style,
                              title=title)
 
-        dicts = [defaultdict(list)] * cpu_count()
-        part_range = int(times_len // (cpu_count() + 1)) + 1
+        dicts = [defaultdict(list)] * num_of_processes
+        part_range = int(times_len // (num_of_processes + 1)) + 1
         t_segments = sorted(t_segments, key=lambda x: x.timestamp)
         j = 0
         timestamps_from = [timestamp_from]
         times_lens = []
         for _, seg in enumerate(t_segments):
-            if seg.timestamp > timestamp_from + (j + 1) * part_range and j < cpu_count() - 1:
+            if seg.timestamp > timestamp_from + (j + 1) * part_range and j < num_of_processes - 1:
                 times_lens.append(seg.timestamp - timestamps_from[j])
                 j += 1
                 timestamps_from.append(seg.timestamp)
             dicts[j][seg.timestamp].append(seg)
-        times_lens.append(t_segments[-1].timestamp - timestamps_from[cpu_count() - 1] + 1)
+        times_lens.append(t_segments[-1].timestamp - timestamps_from[num_of_processes - 1] + 1)
 
-        with Pool() as pool:
-            images = pool.starmap(compute_frame_partial, list(zip(dicts, timestamps_from, times_lens, list(range(cpu_count())))))
-        images = list(chain.from_iterable(images))
+        mp_params = []
+        for params in list(zip(dicts, timestamps_from, times_lens)):
+            mp_params.append(MPParam(*params))
 
     with ts.get("create animation"):
-        timestamp = round(time() * 1000)
-        writer = imageio.get_writer(path.join(save_path, str(timestamp) + "-rt.mp4"), fps=fps)
-        for img in images:
-            writer.append_data(img)
-        writer.close()
+        with Pool() as pool:
+            timestamp = round(time() * 1000)
+            writer = imageio.get_writer(path.join(save_path, str(timestamp) + "-rt.mp4"), fps=fps)
+            for images in pool.imap(compute_frame_partial, mp_params):
+                for img in images:
+                    writer.append_data(img)
+            writer.close()
 
     for k,v in ts.collect().items():
         print(f"{k}: {v} ms")
