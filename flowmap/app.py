@@ -64,7 +64,7 @@ def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_mod
 @click.option('--frames-len', help="Number of frames to plot")
 @click.option('--processed-data','-p', is_flag=True, help="Data is already processed")
 @click.option('--save-data','-s', is_flag=True, help="Save processed data")
-@click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='EQUIDISTANT',
+@click.option('--width-style', type=click.Choice([el.name for el in WidthStyle]), default='BOXED',
               help="Choose style of width plotting")
 @click.option('--width-modif', default=10, type=click.IntRange(2, 200, clamp=True), show_default=True,
               help="Adjust width.")
