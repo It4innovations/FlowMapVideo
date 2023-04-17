@@ -30,16 +30,15 @@ def cli():
     pass
 
 
-def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
+def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, interval):
     def step(i):
         ax.clear()
         ax_settings.apply(ax)
         ax.axis('off')
 
         timestamp = timestamp_from + i # * speed # * round(1000 / fps)
-        # TODO: fix time label
-#         if(i % 5*60 == 0):
-#             time_text_artist.set_text(datetime.utcfromtimestamp(timestamp//10**3))
+        if(i % 5*60 == 0):
+            time_text_artist.set_text(datetime.utcfromtimestamp(timestamp * 1000 * interval //10**3))
         segments = t_seg_dict[timestamp]
         nodes_from = [seg.node_from.id for seg in segments]
         nodes_to = [seg.node_to.id for seg in segments]
@@ -147,7 +146,7 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
                                             width_modif = width_modif,
                                             width_style = width_style,
                                             time_text_artist = time_text,
-                                            speed = speed
+                                            interval = speed / fps
                                             ),
                                         interval=75, frames=floor(times_len), repeat=False)
 
