@@ -21,6 +21,7 @@ from itertools import chain
 import pathlib
 
 from flowmapviz.plot import plot_routes, WidthStyle
+from flowmapviz.zoom import plot_graph_with_zoom
 
 from .input import fill_missing_times
 from .ax_settings import Ax_settings
@@ -124,8 +125,8 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
     with ts.get("map preparing"):
         width_style = WidthStyle[width_style]
 
-        f, ax_map = plt.subplots()
-        fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
+        fig, ax_map = plt.subplots()
+        plot_graph_with_zoom(g, ax_map, secondary_sizes = [1, 0.7, 0.5, 0.3])
         fig.set_size_inches(30, 24)
 
         plt.title(title, fontsize=40)
