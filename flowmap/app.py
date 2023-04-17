@@ -101,11 +101,12 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
         sim_history = sim.history.to_dataframe()
 
     with ts.get("data preprocessing"):
-        t_segments = fill_missing_times(sim_history, g, speed, fps, divide)
+        if not processed_data:
+            t_segments = fill_missing_times(sim_history, g, speed, fps, divide)
 
-        # TODO: fix saving data
         if save_data:
-            times_df.to_csv('data.csv')
+            with open('preprocessed_data.pickle', 'wb') as h:
+                pickle.dump(t_segments, h)
 
     with ts.get("preparing for animation"):
         timestamps = [seg.timestamp for seg in t_segments]
