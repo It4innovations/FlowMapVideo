@@ -27,7 +27,7 @@ Jednotlivé body zadání jsou:
 
 ### Prerekvizity
 
-Pro uložení videa je potřeba `FFmpeg`.
+Pro spuštění je potřeba `FFmpeg` a [Ruth](https://github.com/It4innovations/ruth).
 
 ##
 
@@ -37,28 +37,15 @@ virtualenv <VENV>
 source <VENV>/bin/activate
 ```
 
+
 2. Instalace přes pip
 ```
-python3 -m pip install git+https://project_1327_bot:glpat-YdTTaGALriUSyz7DDmix@code.it4i.cz/intern/trafficflowmap/flowmapopt.git@dev 
+python3 -m pip install git+https://github.com/It4innovations/FlowMapVideo.git@bench/no-dataframe
 ```
 
 ## Spuštění
 ```
 traffic-flow-map --help
 ```
-* DATA_FILE
-  * cesta k PARQUET souboru se sloupci:
-    * timestamp
-    * node_from (osmnx id)
-    * node_to (osmnx id)
-    * vehicle_id
-    * start_offset_m 
-  * v případě použití možnosti ```-p```/```-processed-data``` cesta k CSV souboru se sloupci:
-    * timestamp
-    * node_from (osmnx id)
-    * node_to (osmnx id)
-    * count_from (počet vozidel v první polovině cesty)
-    * count_to (počet vozidel ve druhé polovině cesty)
-* MAP_FILE - cesta k GRAPHML souboru
 
 
