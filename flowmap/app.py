@@ -160,15 +160,21 @@ class TimeUnit(Enum):
 @click.option("--time-unit", type=str,
               help="Time unit. Possible values: [seconds|minutes|hours]",
               default="hours")
-def get_info(simulation_path, time_unit):
+@click.option('--speed', default=1, help="Speed up the video.", show_default=True)
+def get_info(simulation_path, time_unit, speed):
 
     sim = Simulation.load(simulation_path)
 
     time_unit = TimeUnit.from_str(time_unit)
+    time_unit_minutes = TimeUnit.from_str('minutes')
 
     real_time = (sim.history.data[-1][0] - sim.history.data[0][0]) / time_unit.value
 
     print (f"Real time duration: {real_time} {time_unit.name.lower()}.")
+
+    real_time_minutes = (sim.history.data[-1][0] - sim.history.data[0][0]) / time_unit_minutes.value
+
+    print (f"Video length: {real_time_minutes / speed} minutes.")
 
 
 def main():
