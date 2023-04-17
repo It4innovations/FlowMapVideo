@@ -9,7 +9,6 @@ import pickle
 from enum import Enum
 from datetime import timedelta
 from multiprocessing import Pool, cpu_count, Manager
-from functools import partial
 from math import floor
 from os import path
 from matplotlib import animation
@@ -31,15 +30,21 @@ def cli():
     pass
 
 
-def generate_frame(t_seg_dict, timestamp_from, times_len, g, max_count, width_modif, width_style):
-    ims = []
-    for i in range(times_len):
-        timest = timestamp_from + i
-        segments = t_seg_dict[timest]
+def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
+    def step(i):
+        ax.clear()
+        ax_settings.apply(ax)
+        ax.axis('off')
+
+        timestamp = timestamp_from + i # * speed # * round(1000 / fps)
+        # TODO: fix time label
+#         if(i % 5*60 == 0):
+#             time_text_artist.set_text(datetime.utcfromtimestamp(timestamp//10**3))
+        segments = t_seg_dict[timestamp]
         nodes_from = [seg.node_from.id for seg in segments]
         nodes_to = [seg.node_to.id for seg in segments]
         densities = [seg.counts for seg in segments]
-        routes = plot_routes(
+        plot_routes(
             g,
             ax=ax,
             nodes_from=nodes_from,
@@ -47,16 +52,8 @@ def generate_frame(t_seg_dict, timestamp_from, times_len, g, max_count, width_mo
             densities=densities,
             max_width_density=max_count,
             width_modifier=width_modif,
-            width_style=WidthStyle.BOXED,
-            plot=False)
-        im = []
-        for r in routes:
-            if r != [] and r is not None:
-                im.append(r)
-                print(r)
-                r.set_animated(True)
-        ims.append(im)
-    return ims
+            width_style=width_style)
+    return step
 
 
 def get_node_coordinates(g, node_from, node_to):
@@ -121,45 +118,38 @@ def generate_animation(simulation_path, fps, save_path, frame_start, frames_len,
         times_len = max_timestamp - timestamp_from
         times_len = min(int(frames_len), times_len) if frames_len else times_len
 
+        t_seg_dict = defaultdict(list)
+        for seg in t_segments:
+            t_seg_dict[seg.timestamp].append(seg)
+
+    with ts.get("map preparing"):
         width_style = WidthStyle[width_style]
 
-#         for edge in g.edges():
-#             x, y = get_node_coordinates(g, edge[0], edge[1])
-#             lines = ax.plot(x, y, c='#7d7d7d', animated=False)
-#         graph.extend(lines)
+        f, ax_map = plt.subplots()
+        fig, ax_map = ox.plot_graph(g, ax=ax_map, show=False, node_size=0)
+        fig.set_size_inches(30, 24)
 
-    with ts.get("generate frames"):
-        compute_frame_partial = partial(generate_frame,
-                             g=g,
-                             max_count=max_count,
-                             width_modif=width_modif,
-                             width_style=width_style)
+        plt.title(title, fontsize=40)
+        time_text = plt.figtext(0.5, 0.09, datetime.utcfromtimestamp(timestamp_from//10**3), ha="center", fontsize=25)
 
-        dicts = [defaultdict(list)] * cpu_count()
-        part_range = int(times_len // (cpu_count() + 1)) + 1
-        t_segments = sorted(t_segments, key=lambda x: x.timestamp)
-        j = 0
-        timestamps_from = [timestamp_from]
-        times_lens = []
-        for _, seg in enumerate(t_segments):
-            if seg.timestamp > timestamp_from + (j + 1) * part_range and j < cpu_count() - 1:
-                times_lens.append(seg.timestamp - timestamps_from[j])
-                j += 1
-                timestamps_from.append(seg.timestamp)
-            dicts[j][seg.timestamp].append(seg)
-        times_lens.append(t_segments[-1].timestamp - timestamps_from[cpu_count() - 1] + 1)
-
-        with Pool() as pool:
-            frames = pool.starmap(compute_frame_partial, list(zip(dicts, timestamps_from, times_lens)))
-        frames = list(chain.from_iterable(frames))
-
-        for frame in frames:
-            for coll in frame:
-                ax.add_collection(coll)
+        ax_density = ax_map.twinx()
+        ax_map_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
 
     with ts.get("create animation"):
-        plt.axis('off')
-        anim = animation.ArtistAnimation(fig, frames, interval=75, repeat=False)
+        anim = animation.FuncAnimation(plt.gcf(),
+                                        animate(
+                                            g,
+                                            t_seg_dict,
+                                            ax_settings=ax_map_settings,
+                                            ax=ax_density,
+                                            timestamp_from=timestamp_from,
+                                            max_count = max_count,
+                                            width_modif = width_modif,
+                                            width_style = width_style,
+                                            time_text_artist = time_text,
+                                            speed = speed
+                                            ),
+                                        interval=75, frames=floor(times_len), repeat=False)
 
         timestamp = round(time() * 1000)
         anim.save(path.join(save_path, str(timestamp) + "-rt.mp4"), writer="ffmpeg", fps=fps)
