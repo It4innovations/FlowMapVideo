@@ -56,27 +56,6 @@ def animate(g, t_seg_dict, ax, ax_settings, timestamp_from, max_count, width_mod
     return step
 
 
-def get_node_coordinates(g, node_from, node_to):
-    x = []
-    y = []
-    edge = g.get_edge_data(node_from, node_to)
-    if edge is None:
-        edge = g.get_edge_data(node_to, node_from)
-        if edge is None:
-            return x, y
-
-    data = min(edge.values(), key=lambda d: d["length"])
-    if "geometry" in data:
-        xs, ys = data["geometry"].xy
-        x.extend(xs)
-        y.extend(ys)
-    else:
-        x.extend((g.nodes[node_from]["x"], g.nodes[node_to]["x"]))
-        y.extend((g.nodes[node_from]["y"], g.nodes[node_to]["y"]))
-
-    return x, y
-
-
 @cli.command()
 @click.argument('simulation_path')
 @click.option('--fps', '-f', default=25, help="Set video frames per second.", show_default=True)
