@@ -1,4 +1,4 @@
-flowmapviz @ git+https://github.com/It4innovations/FlowMapFrame.git@zoom
+flowmapviz @ git+https://github.com/It4innovations/FlowMapFrame.git
 ruth @ git+https://github.com/It4innovations/ruth
 
 click
