@@ -7,18 +7,14 @@ import numpy as np
 import pickle
 
 from enum import Enum
-from datetime import timedelta
-from multiprocessing import Pool, cpu_count, Manager
+from datetime import timedelta, datetime
 from math import floor
 from os import path
 from matplotlib import animation
-from datetime import datetime
 from time import time
 from collections import defaultdict
 from ruth.simulator import Simulation
-from ruth.utils import TimerSet, Timer
-from itertools import chain
-import pathlib
+from ruth.utils import TimerSet
 
 from flowmapviz.plot import plot_routes, WidthStyle
 from flowmapviz.zoom import plot_graph_with_zoom
