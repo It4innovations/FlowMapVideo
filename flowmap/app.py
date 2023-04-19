@@ -23,6 +23,7 @@ from flowmapviz.zoom import plot_graph_with_zoom
 from .input import fill_missing_times
 from .ax_settings import Ax_settings
 
+
 @click.group()
 def cli():
     pass
@@ -149,7 +150,12 @@ def generate_animation(
 
         fig, ax_map = plt.subplots()
         plot_graph_with_zoom(g, ax_map, secondary_sizes=[1, 0.7, 0.5, 0.3])
-        fig.set_size_inches(30, 24)
+
+        size = fig.get_size_inches()
+        new_size = 20
+        size[1] = size[1] * new_size / size[0]
+        size[0] = new_size
+        fig.set_size_inches(size)
 
         plt.title(title, fontsize=40)
         time_text = plt.figtext(
