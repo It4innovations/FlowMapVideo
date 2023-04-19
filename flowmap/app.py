@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 import pickle
+import logging
 
 from enum import Enum
 from datetime import timedelta, datetime
@@ -112,11 +113,14 @@ def generate_animation(
     mpl.use('Agg')
     ts = TimerSet()
     with ts.get("data loading"):
+        logging.info('Loading simulation data...')
         sim = Simulation.load(simulation_path)
         g = sim.routing_map.network
         sim_history = sim.history.to_dataframe()
+        logging.info('Simulation data loaded.')
 
     with ts.get("data preprocessing"):
+        logging.info('Preprocessing data...')
         if not processed_data:
             timed_segments = fill_missing_times(sim_history, g, speed, fps, divide)
 
@@ -137,8 +141,10 @@ def generate_animation(
         timed_seg_dict = defaultdict(list)
         for seg in timed_segments:
             timed_seg_dict[seg.timestamp].append(seg)
+        logging.info('Data preprocessed.')
 
-    with ts.get("map preparing"):
+    with ts.get("base map preparing"):
+        logging.info('Preparing base map...')
         width_style = WidthStyle[width_style]
 
         fig, ax_map = plt.subplots()
@@ -156,8 +162,10 @@ def generate_animation(
 
         ax_density = ax_map.twinx()
         ax_map_settings = Ax_settings(ylim=ax_map.get_ylim(), aspect=ax_map.get_aspect())
+        logging.info('Base map prepared.')
 
     with ts.get("create animation"):
+        logging.info('Creating animation...')
         anim = animation.FuncAnimation(
             plt.gcf(),
             animate(
@@ -179,7 +187,9 @@ def generate_animation(
 
         timestamp = round(time() * 1000)
         anim.save(path.join(save_path, str(timestamp) + '-rt.mp4'), writer='ffmpeg', fps=fps)
+        logging.info('Animation created.')
 
+    print()
     for k, v in ts.collect().items():
         print(f'{k}: {v} ms')
 
