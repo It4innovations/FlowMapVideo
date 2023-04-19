@@ -1,7 +1,5 @@
 # flowmapopt
 
-* [Roadmap](../../wikis/Roadmap)
-
 ## Zadání
 **Téma**: Optimalizace vizualizace vývoje dopravního toku v čase.
 
@@ -27,7 +25,7 @@ Jednotlivé body zadání jsou:
 
 ### Prerekvizity
 
-Pro spuštění je potřeba `FFmpeg` a [Ruth](https://github.com/It4innovations/ruth).
+Pro spuštění je potřeba nainstalovat `FFmpeg` a [Ruth](https://github.com/It4innovations/ruth).
 
 ##
 
@@ -40,7 +38,7 @@ source <VENV>/bin/activate
 
 2. Instalace přes pip
 ```
-python3 -m pip install git+https://github.com/It4innovations/FlowMapVideo.git@bench/no-dataframe
+python3 -m pip install git+https://github.com/It4innovations/FlowMapVideo.git
 ```
 
 ## Spuštění
@@ -48,4 +46,33 @@ python3 -m pip install git+https://github.com/It4innovations/FlowMapVideo.git@be
 traffic-flow-map --help
 ```
 
+---
+# flowmapopt
+
+A tool that renders a video with traffic intensity based on [Ruth](https://github.com/It4innovations/ruth) traffic simulator result.
+
+## Installation
+
+### Prerequisites
+
+To run, you need to install `FFmpeg` and [Ruth](https://github.com/It4innovations/ruth).
+
+##
+
+1. Create and activate a virtual environment:
+```
+virtualenv <VENV>
+source <VENV>/bin/activate
+```
+
+
+2. Install via pip
+```
+python3 -m pip install git+https://github.com/It4innovations/FlowMapVideo.git
+```
+
+## Run
+```
+traffic-flow-map --help
+```
 
