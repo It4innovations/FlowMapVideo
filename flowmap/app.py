@@ -12,7 +12,7 @@ from datetime import datetime
 from time import time
 from ruth.simulator import Simulation
 
-from flowmapviz.collection_plot import plot_routes, WidthStyle
+from flowmapviz.plot import plot_routes, WidthStyle
 
 from input import preprocess_history_records
 from df import get_max_vehicle_count, get_max_time, get_min_time
