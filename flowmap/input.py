@@ -1,11 +1,9 @@
-from pandas import read_parquet, to_datetime, cut, to_numeric, to_pickle, read_pickle
+from pandas import to_datetime
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-import networkx as nx
 import cinput as ci
 
-from math import floor
+
 
 
 def get_segment_length(node_from_to, g):
@@ -134,24 +132,13 @@ def add_counts(df, divide=2):
 
 
 def preprocess_history_records(df, g, speed=1, fps=25, divide=2):
-    start = datetime.now()
     df = preprocess_fill_missing_times(df, g, speed, fps)
-    print(df.shape)
-    print("rows filled in: ", datetime.now() - start)
-
-    start2 = datetime.now()
     df = preprocess_add_counts(df, divide)
-
-    print(df.shape)
-    print("counts added in: ", datetime.now() - start2)
-    print("total time: ", datetime.now() - start)
-
     return df
 
 
 def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     interval = speed / fps
-    start = datetime.now()
 
     df = df[['timestamp', 'node_from', 'node_to', 'vehicle_id', 'start_offset_m']].copy()
 
