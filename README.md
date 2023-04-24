@@ -31,3 +31,10 @@ python3 -m pip install git+https://github.com/It4innovations/FlowMapVideo.git
 traffic-flow-map --help
 ```
 
+## Example
+To run the example, use the simulation file `example_data/simulation.pickle`.
+
+```
+traffic-flow-map generate-animation simulation.pickle --speed 350 --title "Traffic flow"
+```
+
