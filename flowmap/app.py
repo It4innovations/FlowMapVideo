@@ -1,8 +1,6 @@
 import click
 import osmnx as ox
-import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
 import pathlib
 
 from math import floor
@@ -14,9 +12,9 @@ from ruth.simulator import Simulation
 
 from flowmapviz.plot import plot_routes, WidthStyle
 
-from input import preprocess_history_records
-from df import get_max_vehicle_count, get_max_time, get_min_time
-from ax_settings import Ax_settings
+from .input import preprocess_history_records
+from .df import get_max_vehicle_count, get_max_time, get_min_time
+from .ax_settings import Ax_settings
 
 
 def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, width_style, time_text_artist, speed):
@@ -57,22 +55,14 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
 @click.option('--divide', '-d', default=2, help="Into how many parts will each segment be split.", show_default=True)
 
 def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
-#     temp = pathlib.PosixPath
-    pathlib.PosixPath = pathlib.WindowsPath
-
-    start = datetime.now()
     sim = Simulation.load(simulation_path)
     g = sim.routing_map.network
-    times_df = sim.history.to_dataframe()  # NOTE: this method has some non-trivial overhead
-#     times_df = sim.global_view.to_dataframe()  # NOTE: this method has some non-trivial overhead
-    times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:00:20.000')),:]
-    print(times_df.shape)
-    start = datetime.now()
-    times_df = preprocess_history_records(times_df, g, speed, fps, divide)
-    print("df shape: ", times_df.shape)
-    print(times_df)
-    print("time of preprocessing: ", datetime.now() - start)
+    df = sim.history.to_dataframe()
+    df = preprocess_history_records(df, g, speed, fps, divide)
+
     return
+
+    # code unnecessary for benchmarking
     if save_data:
         times_df.to_csv('data.csv')
 
