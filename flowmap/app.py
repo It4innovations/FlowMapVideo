@@ -1,8 +1,7 @@
 import click
 import osmnx as ox
 import matplotlib.pyplot as plt
-import numpy as np
-import pathlib
+import logging
 
 from math import floor
 from os import path
