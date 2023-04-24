@@ -4,20 +4,6 @@ import numpy as np
 import cinput as ci
 
 
-
-
-def get_segment_length(node_from_to, g):
-    node_from, node_to = node_from_to
-    data = g.get_edge_data(node_from, node_to)
-    # NOTE: uncomment assert, comment returning nan
-    # assert data
-    if data is None:
-        return np.nan
-    data = data[0]
-    assert "length" in data
-    return data['length']
-
-
 def fill_missing_rows(df):
     # add missing times
     df.sort_values(['vehicle_id', 'timestamp'], inplace=True)
@@ -46,10 +32,10 @@ def fill_missing_rows(df):
     df = df.explode(column=['timestamp', 'start_offset_m'])
     df.reset_index(inplace=True)
 
-    df[['new_node_from', 'new_node_to', 'new_start_offset_m', 'new_length']] = df[['node_from', 'node_to', 'start_offset_m', 'length']]
+    df[['new_node_from', 'new_node_to', 'new_start_offset_m', 'new_length']] = df[['node_from', 'node_to', 'start_offset_m', 'segment_length']]
 
     # the change of segment
-    mask = (df['start_offset_m'] > df['length']) & (df['next_vehicle_id'] == df['vehicle_id'])
+    mask = (df['start_offset_m'] > df['segment_length']) & (df['next_vehicle_id'] == df['vehicle_id'])
     column_pairs = zip(
         ['new_node_from', 'new_node_to', 'new_length'],
         ['next_node_from', 'next_node_to', 'next_length'])
@@ -57,13 +43,13 @@ def fill_missing_rows(df):
     for column_new, column_next in column_pairs:
         df.loc[mask, column_new] = df.loc[mask, column_next]
 
-    df.loc[mask, 'new_start_offset_m'] = df.loc[mask, 'start_offset_m'] - df.loc[mask, 'length']
+    df.loc[mask, 'new_start_offset_m'] = df.loc[mask, 'start_offset_m'] - df.loc[mask, 'segment_length']
 
     df.drop([
         'node_to',
         'node_from',
         'start_offset_m',
-        'length',
+        'segment_length',
         'next_node_from',
         'next_node_to',
         'next_length',
@@ -74,7 +60,7 @@ def fill_missing_rows(df):
         'new_node_to': 'node_to',
         'new_node_from': 'node_from',
         'new_start_offset_m': 'start_offset_m',
-        'new_length': 'length'
+        'new_length': 'segment_length'
     }, inplace = True)
 
     return df
@@ -91,7 +77,7 @@ def add_counts(df, divide=2):
         divide = 2
 
     # find out which part of the segment is the vehicle in
-    df['part'] = df['start_offset_m'] // (df['length'] / divide)
+    df['part'] = df['start_offset_m'] // (df['segment_length'] / divide)
     df.loc[df['part'] >= divide, 'part'] = divide - 1
     count_columns = ['counts_' + str(x) for x in range(divide - 2)]
     count_columns[:0] = ['count_from']
@@ -140,25 +126,17 @@ def preprocess_history_records(df, g, speed=1, fps=25, divide=2):
 def preprocess_fill_missing_times(df, g, speed=1, fps=25):
     interval = speed / fps
 
-    df = df[['timestamp', 'node_from', 'node_to', 'vehicle_id', 'start_offset_m']].copy()
+    df = df[['timestamp', 'node_from', 'node_to', 'vehicle_id', 'start_offset_m', 'segment_length']].copy()
 
     df['node_from'] = df['node_from'].astype(str).astype(np.uint64)
     df['node_to'] = df['node_to'].astype(str).astype(np.uint64)
     df['vehicle_id'] = df['vehicle_id'].astype(str).astype(np.uint16)
     df['start_offset_m'] = df['start_offset_m'].astype(str).astype(np.float32)
-    df['length'] = pd.Series(dtype='float32')
     # change datetime to int
     df['timestamp']= to_datetime(df['timestamp']).astype(np.int64)//10**6 # resolution in milliseconds
 
     df['timestamp'] = df['timestamp'].div(1000 * interval).round().astype(np.int64)
     df = df.groupby(['timestamp', 'vehicle_id']).first().reset_index()
-
-    # add column with length
-    df['length'] = df[['node_from', 'node_to']].apply(get_segment_length, axis=1, g=g)
-    # NOTE: comment this later - there are segments not found in the map in the data
-
-    # drop rows where path hasn't been found in the graph
-    df.dropna(subset=['length'], inplace=True)
 
     df = fill_missing_rows(df)
 
