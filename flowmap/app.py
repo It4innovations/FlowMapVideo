@@ -158,10 +158,11 @@ def generate_animation(
         fig.set_size_inches(size)
 
         plt.title(title, fontsize=40)
+        interval = speed / fps
         time_text = plt.figtext(
             0.5,
             0.09,
-            datetime.utcfromtimestamp(timestamp_from // 10**3),
+            datetime.utcfromtimestamp(timestamp_from * 1000 * interval // 10**3),
             ha='center',
             fontsize=25
         )
@@ -184,7 +185,7 @@ def generate_animation(
                 width_modif=width_modif,
                 width_style=width_style,
                 time_text_artist=time_text,
-                interval=speed / fps
+                interval=interval
             ),
             interval=75,
             frames=floor(num_of_frames),
