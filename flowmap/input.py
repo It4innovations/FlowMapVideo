@@ -175,10 +175,6 @@ def preprocess_fill_missing_times(df, g, speed=1, fps=25):
 
     df = fill_missing_rows(df)
 
-    mask = df['node_from'] > df['node_to']
-    df.loc[mask, 'start_offset_m'] = df['length'] - df['start_offset_m']
-    df.loc[mask, ['node_from', 'node_to']] = (df.loc[mask, ['node_to', 'node_from']].values)
-
     return df
 
 
