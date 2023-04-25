@@ -2,9 +2,7 @@ import click
 import osmnx as ox
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
 import multiprocessing as mp
-import pathlib
 
 from math import floor
 from os import path
@@ -15,24 +13,22 @@ from functools import partial
 from ruth.simulator import Simulation
 from multiprocessing.pool import Pool
 
-from flowmapviz.collection_plot import plot_routes, WidthStyle
+from flowmapviz.plot import plot_routes, WidthStyle
 
-from input import preprocess_fill_missing_times, preprocess_add_counts
-from df import get_max_vehicle_count, get_max_time, get_min_time
-from ax_settings import Ax_settings
+from .input import preprocess_fill_missing_times, preprocess_add_counts
+from .df import get_max_vehicle_count, get_max_time, get_min_time
+from .ax_settings import Ax_settings
 
 
 def preprocess_fill_mp(df, g, speed, fps):
     return preprocess_fill_missing_times(df, g, speed, fps)
 
 
-def preprocess_counts_mp(df, g, speed, fps, divide):
+def preprocess_counts_mp(df, divide):
     return preprocess_add_counts(df, divide)
 
 
 def preprocess_mp(df, g, speed, fps, divide):
-    start = datetime.now()
-
     cpu_count = mp.cpu_count()
     num_of_processes = cpu_count
     df.sort_values(['vehicle_id', 'timestamp'], inplace=True)
@@ -48,7 +44,7 @@ def preprocess_mp(df, g, speed, fps, divide):
 
     args = [df.loc[(df['vehicle_id'] >= split_vehicle_ids[i]) & (df['vehicle_id'] < split_vehicle_ids[i + 1]),:] for i in range(cpu_count)]
     fill_mp_partial = partial(preprocess_fill_mp, g=g, speed=speed, fps=fps)
-    counts_mp_partial = partial(preprocess_counts_mp, g=g, speed=speed, fps=fps, divide=divide)
+    counts_mp_partial = partial(preprocess_counts_mp, divide=divide)
 
     with Pool(cpu_count) as pool:
         df_list = []
@@ -57,7 +53,6 @@ def preprocess_mp(df, g, speed, fps, divide):
             df_list.append(result)
 
         df = pd.concat(df_list)
-        print(df.shape)
         df.sort_values(['timestamp'], inplace=True)
 
         number_of_rows = df.shape[0]
@@ -71,9 +66,7 @@ def preprocess_mp(df, g, speed, fps, divide):
             df_list.append(result)
 
         df = pd.concat(df_list)
-        print(df.shape)
 
-    print(df)
     return df
 
 
