@@ -3,6 +3,7 @@ import osmnx as ox
 import pandas as pd
 import matplotlib.pyplot as plt
 import multiprocessing as mp
+import logging
 
 from math import floor
 from os import path
@@ -11,6 +12,7 @@ from datetime import datetime
 from time import time
 from functools import partial
 from ruth.simulator import Simulation
+from ruth.utils import TimerSet
 from multiprocessing.pool import Pool
 
 from flowmapviz.plot import plot_routes, WidthStyle
@@ -108,23 +110,26 @@ def animate(g, times, ax, ax_settings, timestamp_from, max_count, width_modif, w
 @click.option('--divide', '-d', default=2, help="Into how many parts will each segment be split.", show_default=True)
 
 def main(simulation_path, fps, save_path, frame_start, frames_len, processed_data, save_data, width_style, width_modif, title, speed, divide):
-#     temp = pathlib.PosixPath
-    pathlib.PosixPath = pathlib.WindowsPath
+    ts = TimerSet()
+    with ts.get("data loading"):
+        logging.info('Loading simulation data...')
+        sim = Simulation.load(simulation_path)
+        g = sim.routing_map.network
+        df = sim.history.to_dataframe()
+        logging.info('Simulation data loaded.')
 
-    start = datetime.now()
-    sim = Simulation.load(simulation_path)
-    g = sim.routing_map.network
-    times_df = sim.history.to_dataframe()  # NOTE: this method has some non-trivial overhead
-#     times_df = sim.global_view.to_dataframe()  # NOTE: this method has some non-trivial overhead
-#     times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:01:00.000')),:]
-    times_df = times_df.loc[(times_df['timestamp'] > np.datetime64('2021-06-16T08:00:00.000')) & (times_df['timestamp'] < np.datetime64('2021-06-16T08:05:00.000')),:]
-    print(times_df.shape)
-    start = datetime.now()
-    times_df = preprocess_mp(times_df, g, speed, fps, divide)
-    print("df shape: ", times_df.shape)
-    print("time of preprocessing: ", datetime.now() - start)
+    with ts.get("data preprocessing"):
+        logging.info('Preprocessing data...')
+        df = preprocess_mp(df, g, speed, fps, divide)
+        logging.info('Data preprocessed.')
+
+    print()
+    for k, v in ts.collect().items():
+        print(f'{k}: {v} ms')
 
     return
+
+    # code unnecessary for benchmarking
     if save_data:
         times_df.to_csv('data.csv')
 
